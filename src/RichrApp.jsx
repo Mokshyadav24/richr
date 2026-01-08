@@ -53,7 +53,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v42-profile-url';
+const appId = 'richr-v45-fix-refs';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -117,7 +117,8 @@ const getFinancialContext = (transactions, userData) => {
     `;
 };
 
-// --- Components ---
+// --- Components (Defined BEFORE Usage) ---
+
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -144,7 +145,100 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
-// --- SUB-COMPONENTS ---
+const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
+  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 right-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
+  return (
+    <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
+        <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
+        <div className="flex-1 text-left">
+            <h3 className={`font-semibold mb-1 text-sm uppercase tracking-wider ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Wisdom of the Day</h3>
+            <p className={`text-sm italic font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>"{quote}"</p>
+        </div>
+        <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
+    </div>
+  );
+};
+
+const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
+  const monthsData = useMemo(() => {
+    const today = new Date();
+    const result = [];
+    for (let i = 3; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthName = d.toLocaleString('default', { month: 'short' });
+        const year = d.getFullYear();
+        const daysInMonth = [];
+        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
+        for(let j=1; j<=monthEnd.getDate(); j++) {
+            const current = new Date(d.getFullYear(), d.getMonth(), j);
+            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
+        }
+        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
+    }
+    return result;
+  }, []);
+
+  const dataMap = useMemo(() => {
+    const map = {};
+    transactions.forEach(tx => { 
+        if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; 
+    });
+    return map;
+  }, [transactions]);
+
+  const getColor = (dateStr) => {
+    if (!dateStr) return "invisible";
+    const amount = dataMap[dateStr] || 0;
+    if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200";
+    if (amount < 500) return "bg-emerald-900";
+    if (amount < 2000) return "bg-emerald-600";
+    return "bg-emerald-400";
+  };
+
+  return (
+    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+       <div className="flex gap-6 min-w-max">
+           {monthsData.map((m, idx) => (
+               <div key={idx} className="flex flex-col gap-2">
+                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span>
+                   <div className="grid grid-cols-7 gap-1">
+                       {m.days.map((d, i) => (
+                           <div 
+                               key={i} 
+                               title={d ? `${d}: ₹${dataMap[d]||0}` : ''}
+                               onClick={() => d && onDateClick(d)}
+                               className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}
+                           />
+                       ))}
+                   </div>
+               </div>
+           ))}
+       </div>
+    </div>
+  );
+};
+
+const BudgetPieChart = ({ transactions, isDark }) => {
+    const currentMonthStr = getMonthStr(new Date());
+    const data = useMemo(() => {
+        const buckets = { Need: 0, Want: 0, Investment: 0 };
+        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
+            const type = t.typeClass || guessBudgetCategory(t.tag);
+            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
+        });
+        return buckets;
+    }, [transactions, currentMonthStr]);
+    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
+    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
+    return (
+        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
+            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
+        </div>
+    );
+};
 
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
@@ -275,8 +369,8 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     );
 };
 
-const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, geminiKey, setGeminiKey, setIsDarkMode, userId, onUpdateProfile }) => {
-    const [activeTab, setActiveTab] = useState('calculators');
+const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, geminiKey, setGeminiKey, setIsDarkMode, userId, onUpdateProfile, initialTab }) => {
+    const [activeTab, setActiveTab] = useState(initialTab || 'calculators');
     const [editData, setEditData] = useState(userData);
 
     const handleProfileUpdate = () => {
@@ -289,7 +383,6 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
              <div className={`w-full max-w-2xl h-[600px] flex flex-col rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up ${isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-gray-200'}`}>
                 <div className={`p-6 border-b flex justify-between items-start ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
                     <div className="flex items-center gap-4">
-                        {/* Profile Picture or Initial */}
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-2xl font-bold text-white shadow-lg overflow-hidden border-2 border-white/10">
                             {userData.profilePic ? (
                                 <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
@@ -332,8 +425,8 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                         {activeTab === 'profile' && (
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
-                                <div><label className="text-xs text-slate-500">Username (Unique URL)</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} placeholder="username" /></div>
-                                <div><label className="text-xs text-slate-500">Profile Picture URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} placeholder="https://..." /></div>
+                                <div><label className="text-xs text-slate-500">Username</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                <div><label className="text-xs text-slate-500">Profile Pic URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                     <div><label className="text-xs text-slate-500">Fixed Expenses</label><input type="number" value={editData.expenses} onChange={e => setEditData({...editData, expenses: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
@@ -351,7 +444,7 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>App Settings</h3>
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-700/50">
                                     <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Appearance</span>
-                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
                                 </div>
                                 <div>
                                     <label className="text-xs text-slate-500 block mb-2">Gemini API Key</label>
@@ -394,67 +487,6 @@ const ChatBot = ({ userData, transactions, geminiKey, isDark, onClose }) => {
     );
 };
 
-const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 right-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
-  return (
-    <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
-        <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
-        <div className="flex-1 text-left"><h3 className={`font-semibold mb-1 text-sm uppercase tracking-wider ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Wisdom of the Day</h3><p className={`text-sm italic font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>"{quote}"</p></div>
-        <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
-    </div>
-  );
-};
-
-const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
-  const monthsData = useMemo(() => {
-    const today = new Date();
-    const result = [];
-    for (let i = 3; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const monthName = d.toLocaleString('default', { month: 'short' });
-        const year = d.getFullYear();
-        const daysInMonth = [];
-        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
-        for(let j=1; j<=monthEnd.getDate(); j++) {
-            const current = new Date(d.getFullYear(), d.getMonth(), j);
-            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
-        }
-        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
-    }
-    return result;
-  }, []);
-  const dataMap = useMemo(() => { const map = {}; transactions.forEach(tx => { if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; }); return map; }, [transactions]);
-  const getColor = (dateStr) => { if (!dateStr) return "invisible"; const amount = dataMap[dateStr] || 0; if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200"; if (amount < 500) return "bg-emerald-900"; if (amount < 2000) return "bg-emerald-600"; return "bg-emerald-400"; };
-  return (
-    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-       <div className="flex gap-6 min-w-max">{monthsData.map((m, idx) => (<div key={idx} className="flex flex-col gap-2"><span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span><div className="grid grid-cols-7 gap-1">{m.days.map((d, i) => (<div key={i} title={d ? `${d}: ₹${dataMap[d]||0}` : ''} onClick={() => d && onDateClick(d)} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}/>))}</div></div>))}</div>
-       <div className={`flex gap-2 items-center text-[10px] mt-3 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}><span>Less</span><div className={`w-2 h-2 ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`}></div><div className="w-2 h-2 bg-emerald-900"></div><div className="w-2 h-2 bg-emerald-600"></div><div className="w-2 h-2 bg-emerald-400"></div><span>More</span></div>
-    </div>
-  );
-};
-
-const BudgetPieChart = ({ transactions, isDark }) => {
-    const currentMonthStr = getMonthStr(new Date());
-    const data = useMemo(() => {
-        const buckets = { Need: 0, Want: 0, Investment: 0 };
-        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
-            const type = t.typeClass || guessBudgetCategory(t.tag);
-            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
-        });
-        return buckets;
-    }, [transactions, currentMonthStr]);
-    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
-    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
-    return (
-        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
-            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
-        </div>
-    );
-};
-
 // --- Main App ---
 
 export default function RichrApp() {
@@ -478,6 +510,7 @@ export default function RichrApp() {
   // UI State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState('profile');
   const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY');
   
   // Dashboard Utils
@@ -503,6 +536,16 @@ export default function RichrApp() {
         window.history.pushState({}, '', `/${userData.username}`);
     }
   }, [userData.username]);
+
+  // --- Safety Timeout for Loading ---
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          if (view === 'loading' && !user) {
+              setView('auth');
+          }
+      }, 3000); 
+      return () => clearTimeout(timer);
+  }, [view, user]);
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -643,7 +686,11 @@ export default function RichrApp() {
   if (view === 'setup') return (
     <div className={`min-h-screen flex items-center justify-center p-6 ${isDarkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
       <Card className="w-full max-w-lg" isDark={isDarkMode}>
-        <div className="mb-6 text-center"><h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Complete Your Profile</h2><p className="text-sm text-slate-500">To help Richr give you the best insights.</p></div>
+        <div className="flex justify-between items-center mb-6">
+            <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Complete Profile</h2>
+            <button onClick={() => signOut(auth)} className="text-red-400 hover:text-red-300 flex items-center gap-1 text-sm"><LogOut size={16}/> Logout</button>
+        </div>
+        <p className="text-sm text-slate-500 mb-6">To help Richr give you the best insights.</p>
         <form onSubmit={handleProfileSubmit} className="space-y-4">
             <div><label className="block text-xs text-slate-400 mb-1">Full Name</label><input type="text" required className={`w-full p-3 rounded-xl focus:border-emerald-500 focus:outline-none ${isDarkMode ? 'bg-slate-900 border-slate-700 text-white' : 'bg-gray-50 border-gray-300 text-slate-900'}`} value={manualFormData.name} onChange={e => setManualFormData({...manualFormData, name: e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-4">
@@ -664,11 +711,24 @@ export default function RichrApp() {
 
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-slate-800'}`}>
-      <nav className={`p-6 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
-        <div className="flex items-center gap-2"><Activity className="text-emerald-500" /><span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span></div>
-        <div className="flex items-center gap-4">
-            <button onClick={() => setIsProfileOpen(true)} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
-                {userData.profilePic ? <img src={userData.profilePic} className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
+      <nav className={`p-4 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
+        <div className="flex-1 flex justify-start">
+            {!showQuote && (
+                <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
+                    <Lightbulb size={20} />
+                </button>
+            )}
+        </div>
+        <div className="flex-none flex items-center gap-2">
+            <Activity className="text-emerald-500" />
+            <span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span>
+        </div>
+        <div className="flex-1 flex justify-end items-center gap-4">
+            <button onClick={() => { setProfileInitialTab('settings'); setIsProfileOpen(true); }} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}>
+                <Settings size={20} />
+            </button>
+            <button onClick={() => { setProfileInitialTab('profile'); setIsProfileOpen(true); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
+                {userData.profilePic ? <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
             </button>
         </div>
       </nav>
@@ -728,7 +788,7 @@ export default function RichrApp() {
                         </select></div>
                     </div>
                     {/* Transaction List */}
-                    <div className="space-y-6 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
                         {groupedTransactions.map(group => (
                             <div key={group.date}>
                                 <div className={`sticky top-0 z-10 py-1 px-3 mb-2 text-xs font-bold uppercase tracking-wider flex justify-between rounded ${isDarkMode ? 'bg-slate-800/80 text-slate-400 backdrop-blur-md' : 'bg-gray-100 text-gray-500'}`}>
@@ -766,7 +826,7 @@ export default function RichrApp() {
       <Button variant="chat" onClick={() => setIsChatOpen(true)} icon={MessageSquare}>Chat with Richr</Button>
       {isChatOpen && <ChatBot userData={userData} transactions={transactions} geminiKey={geminiKey} isDark={isDarkMode} onClose={() => setIsChatOpen(false)} />}
       
-      {isProfileOpen && <ProfileModal userData={userData} userId={user.uid} isDark={isDarkMode} onClose={() => setIsProfileOpen(false)} onSaveSettings={saveSettings} onLogout={() => signOut(auth)} geminiKey={geminiKey} setGeminiKey={setGeminiKey} setIsDarkMode={setIsDarkMode} onUpdateProfile={handleUpdateProfile} />}
+      {isProfileOpen && <ProfileModal userData={userData} userId={user.uid} isDark={isDarkMode} onClose={() => setIsProfileOpen(false)} onSaveSettings={saveSettings} onLogout={() => signOut(auth)} geminiKey={geminiKey} setGeminiKey={setGeminiKey} setIsDarkMode={setIsDarkMode} onUpdateProfile={handleUpdateProfile} initialTab={profileInitialTab} />}
 
       {isAddModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

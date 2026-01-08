@@ -34,26 +34,22 @@ import {
 } from "firebase/firestore";
 
 // --- Firebase Configuration ---
-let firebaseConfig;
-try {
-  firebaseConfig = JSON.parse(__firebase_config);
-} catch (e) {
-  firebaseConfig = {
-    apiKey: "AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY", 
-    authDomain: "richr-d5cfc.firebaseapp.com",
-    projectId: "richr-d5cfc",
-    storageBucket: "richr-d5cfc.firebasestorage.app",
-    messagingSenderId: "1031148718480",
-    appId: "1:1031148718480:web:96072659913fa7b4b58b15",
-    measurementId: "G-PLJ99FLJPD"
-  };
-}
+// Updated with your provided Browser Key
+const firebaseConfig = {
+  apiKey: "AIzaSyDNKg65VDw5GL48D5X4DB9maFG49DupAeM", 
+  authDomain: "richr-d5cfc.firebaseapp.com",
+  projectId: "richr-d5cfc",
+  storageBucket: "richr-d5cfc.firebasestorage.app",
+  messagingSenderId: "1031148718480",
+  appId: "1:1031148718480:web:96072659913fa7b4b58b15",
+  measurementId: "G-PLJ99FLJPD"
+};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v40-stable';
+const appId = 'richr-v41-keys-updated';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -117,8 +113,7 @@ const getFinancialContext = (transactions, userData) => {
     `;
 };
 
-// --- SUB-COMPONENTS (Defined BEFORE Usage) ---
-
+// --- Components ---
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -145,100 +140,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
-const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 right-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
-  return (
-    <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
-        <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
-        <div className="flex-1 text-left">
-            <h3 className={`font-semibold mb-1 text-sm uppercase tracking-wider ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Wisdom of the Day</h3>
-            <p className={`text-sm italic font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>"{quote}"</p>
-        </div>
-        <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
-    </div>
-  );
-};
-
-const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
-  const monthsData = useMemo(() => {
-    const today = new Date();
-    const result = [];
-    for (let i = 3; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const monthName = d.toLocaleString('default', { month: 'short' });
-        const year = d.getFullYear();
-        const daysInMonth = [];
-        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
-        for(let j=1; j<=monthEnd.getDate(); j++) {
-            const current = new Date(d.getFullYear(), d.getMonth(), j);
-            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
-        }
-        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
-    }
-    return result;
-  }, []);
-
-  const dataMap = useMemo(() => {
-    const map = {};
-    transactions.forEach(tx => { 
-        if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; 
-    });
-    return map;
-  }, [transactions]);
-
-  const getColor = (dateStr) => {
-    if (!dateStr) return "invisible";
-    const amount = dataMap[dateStr] || 0;
-    if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200";
-    if (amount < 500) return "bg-emerald-900";
-    if (amount < 2000) return "bg-emerald-600";
-    return "bg-emerald-400";
-  };
-
-  return (
-    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-       <div className="flex gap-6 min-w-max">
-           {monthsData.map((m, idx) => (
-               <div key={idx} className="flex flex-col gap-2">
-                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span>
-                   <div className="grid grid-cols-7 gap-1">
-                       {m.days.map((d, i) => (
-                           <div 
-                               key={i} 
-                               title={d ? `${d}: ₹${dataMap[d]||0}` : ''}
-                               onClick={() => d && onDateClick(d)}
-                               className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}
-                           />
-                       ))}
-                   </div>
-               </div>
-           ))}
-       </div>
-    </div>
-  );
-};
-
-const BudgetPieChart = ({ transactions, isDark }) => {
-    const currentMonthStr = getMonthStr(new Date());
-    const data = useMemo(() => {
-        const buckets = { Need: 0, Want: 0, Investment: 0 };
-        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
-            const type = t.typeClass || guessBudgetCategory(t.tag);
-            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
-        });
-        return buckets;
-    }, [transactions, currentMonthStr]);
-    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
-    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
-    return (
-        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
-            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
-        </div>
-    );
-};
+// --- SUB-COMPONENTS ---
 
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
@@ -369,36 +271,6 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     );
 };
 
-const ChatBot = ({ userData, transactions, geminiKey, isDark, onClose }) => {
-    const [messages, setMessages] = useState([{ role: 'ai', text: `Hi ${userData.name || 'there'}! I'm Richr. Ask me about your spending trends, budget advice, or specific transaction details.` }]);
-    const [input, setInput] = useState('');
-    const [isThinking, setIsThinking] = useState(false);
-    const scrollRef = useRef(null);
-
-    useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
-
-    const handleSend = async (e) => {
-        e.preventDefault(); if (!input.trim()) return;
-        const userMsg = { role: 'user', text: input }; setMessages(prev => [...prev, userMsg]); setInput(''); setIsThinking(true);
-        const context = getFinancialContext(transactions, userData);
-        let replyText = "I'm having trouble analyzing right now.";
-        if (geminiKey) {
-            const prompt = `Role: Expert Financial Advisor Chatbot. Context: ${context}. User Question: "${userMsg.text}". Task: Analyze user data deeply. Answer the question. Provide actionable advice. Keep it under 4 sentences.`;
-            const aiResponse = await callGeminiFlash(geminiKey, prompt);
-            if (aiResponse) replyText = aiResponse;
-        } else { replyText = "Please enable Gemini API for insights."; }
-        setMessages(prev => [...prev, { role: 'ai', text: replyText }]); setIsThinking(false);
-    };
-
-    return (
-        <div className={`fixed bottom-24 right-6 w-80 md:w-96 h-[500px] rounded-2xl shadow-2xl flex flex-col z-50 border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
-            <div className={`p-4 border-b flex justify-between items-center ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-indigo-600 border-indigo-700'}`}><div className="flex items-center gap-2"><Bot size={20} className="text-white" /><span className="font-bold text-white">Richr Chat</span></div><button onClick={onClose} className="text-white/70 hover:text-white"><X size={18}/></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>{messages.map((m, i) => (<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? (isDark ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-indigo-600 text-white rounded-br-none') : (isDark ? 'bg-slate-800 text-slate-200 rounded-bl-none' : 'bg-gray-100 text-gray-800 rounded-bl-none')}`}>{m.text}</div></div>))}{isThinking && <div className="flex justify-start"><div className={`p-3 rounded-2xl rounded-bl-none ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div></div>}</div>
-            <form onSubmit={handleSend} className={`p-3 border-t flex gap-2 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-gray-200 bg-white'}`}><input className={`flex-1 px-4 py-2 rounded-full text-sm outline-none border ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-500'}`} placeholder="Ask insights..." value={input} onChange={(e) => setInput(e.target.value)} /><button type="submit" className={`p-2 rounded-full ${isDark ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}><Send size={18} /></button></form>
-        </div>
-    );
-};
-
 const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, geminiKey, setGeminiKey, setIsDarkMode, userId, onUpdateProfile }) => {
     const [activeTab, setActiveTab] = useState('calculators');
     const [editData, setEditData] = useState(userData);
@@ -465,7 +337,7 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>App Settings</h3>
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-700/50">
                                     <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Appearance</span>
-                                    <button onClick={() => setIsDarkMode(!isDark)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDarkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
                                 </div>
                                 <div>
                                     <label className="text-xs text-slate-500 block mb-2">Gemini API Key</label>
@@ -477,6 +349,125 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                     </div>
                 </div>
              </div>
+        </div>
+    );
+};
+
+const ChatBot = ({ userData, transactions, geminiKey, isDark, onClose }) => {
+    const [messages, setMessages] = useState([{ role: 'ai', text: `Hi ${userData.name || 'there'}! I'm Richr. Ask me about your spending trends, budget advice, or specific transaction details.` }]);
+    const [input, setInput] = useState('');
+    const [isThinking, setIsThinking] = useState(false);
+    const scrollRef = useRef(null);
+    useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages]);
+    const handleSend = async (e) => {
+        e.preventDefault(); if (!input.trim()) return;
+        const userMsg = { role: 'user', text: input }; setMessages(prev => [...prev, userMsg]); setInput(''); setIsThinking(true);
+        const context = getFinancialContext(transactions, userData);
+        let replyText = "I'm having trouble analyzing right now.";
+        if (geminiKey) {
+            const prompt = `Role: Expert Financial Advisor Chatbot. Context: ${context}. User Question: "${userMsg.text}". Task: Analyze user data deeply. Answer the question. Provide actionable advice. Keep it under 4 sentences.`;
+            const aiResponse = await callGeminiFlash(geminiKey, prompt);
+            if (aiResponse) replyText = aiResponse;
+        } else { replyText = "Please enable Gemini API for insights."; }
+        setMessages(prev => [...prev, { role: 'ai', text: replyText }]); setIsThinking(false);
+    };
+    return (
+        <div className={`fixed bottom-24 right-6 w-80 md:w-96 h-[500px] rounded-2xl shadow-2xl flex flex-col z-50 border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+            <div className={`p-4 border-b flex justify-between items-center ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-indigo-600 border-indigo-700'}`}><div className="flex items-center gap-2"><Bot size={20} className="text-white" /><span className="font-bold text-white">Richr Chat</span></div><button onClick={onClose} className="text-white/70 hover:text-white"><X size={18}/></button></div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>{messages.map((m, i) => (<div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] p-3 rounded-2xl text-sm ${m.role === 'user' ? (isDark ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-indigo-600 text-white rounded-br-none') : (isDark ? 'bg-slate-800 text-slate-200 rounded-bl-none' : 'bg-gray-100 text-gray-800 rounded-bl-none')}`}>{m.text}</div></div>))}{isThinking && <div className="flex justify-start"><div className={`p-3 rounded-2xl rounded-bl-none ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}><Loader2 className="w-4 h-4 animate-spin text-slate-400" /></div></div>}</div>
+            <form onSubmit={handleSend} className={`p-3 border-t flex gap-2 ${isDark ? 'border-slate-800 bg-slate-900' : 'border-gray-200 bg-white'}`}><input className={`flex-1 px-4 py-2 rounded-full text-sm outline-none border ${isDark ? 'bg-slate-800 border-slate-700 text-white focus:border-emerald-500' : 'bg-gray-50 border-gray-200 text-gray-900 focus:border-indigo-500'}`} placeholder="Ask insights..." value={input} onChange={(e) => setInput(e.target.value)} /><button type="submit" className={`p-2 rounded-full ${isDark ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}><Send size={18} /></button></form>
+        </div>
+    );
+};
+
+const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
+  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 right-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
+  return (
+    <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
+        <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
+        <div className="flex-1 text-left"><h3 className={`font-semibold mb-1 text-sm uppercase tracking-wider ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Wisdom of the Day</h3><p className={`text-sm italic font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>"{quote}"</p></div>
+        <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
+    </div>
+  );
+};
+
+const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
+  const monthsData = useMemo(() => {
+    const today = new Date();
+    const result = [];
+    for (let i = 3; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthName = d.toLocaleString('default', { month: 'short' });
+        const year = d.getFullYear();
+        const daysInMonth = [];
+        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
+        for(let j=1; j<=monthEnd.getDate(); j++) {
+            const current = new Date(d.getFullYear(), d.getMonth(), j);
+            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
+        }
+        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
+    }
+    return result;
+  }, []);
+
+  const dataMap = useMemo(() => {
+    const map = {};
+    transactions.forEach(tx => { 
+        if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; 
+    });
+    return map;
+  }, [transactions]);
+
+  const getColor = (dateStr) => {
+    if (!dateStr) return "invisible";
+    const amount = dataMap[dateStr] || 0;
+    if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200";
+    if (amount < 500) return "bg-emerald-900";
+    if (amount < 2000) return "bg-emerald-600";
+    return "bg-emerald-400";
+  };
+
+  return (
+    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+       <div className="flex gap-6 min-w-max">
+           {monthsData.map((m, idx) => (
+               <div key={idx} className="flex flex-col gap-2">
+                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span>
+                   <div className="grid grid-cols-7 gap-1">
+                       {m.days.map((d, i) => (
+                           <div 
+                               key={i} 
+                               title={d ? `${d}: ₹${dataMap[d]||0}` : ''}
+                               onClick={() => d && onDateClick(d)}
+                               className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}
+                           />
+                       ))}
+                   </div>
+               </div>
+           ))}
+       </div>
+    </div>
+  );
+};
+
+const BudgetPieChart = ({ transactions, isDark }) => {
+    const currentMonthStr = getMonthStr(new Date());
+    const data = useMemo(() => {
+        const buckets = { Need: 0, Want: 0, Investment: 0 };
+        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
+            const type = t.typeClass || guessBudgetCategory(t.tag);
+            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
+        });
+        return buckets;
+    }, [transactions, currentMonthStr]);
+    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
+    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
+    return (
+        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
+            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
         </div>
     );
 };
@@ -504,7 +495,7 @@ export default function RichrApp() {
   // UI State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY');
+  const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY'); // Default key
   
   // Dashboard Utils
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -602,7 +593,7 @@ export default function RichrApp() {
   }, [transactions]);
   const budgetHealth = useMemo(() => userData.income ? Math.min((stats.monthly / userData.income) * 100, 100) : 0, [stats.monthly, userData.income]);
 
-  // --- FILTERING LOGIC ---
+  // --- FILTERING LOGIC (UPDATED FOR INTERACTIVITY) ---
   const filteredTransactions = useMemo(() => {
       let filtered = transactions.filter(t => categoryFilter === 'All' || t.tag === categoryFilter || (categoryFilter === 'Income' && t.category === 'Income'));
       if (selectedDate) {

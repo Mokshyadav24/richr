@@ -5,7 +5,7 @@ import {
   Lock, Mail, ChevronRight, AlertCircle, FileText, Trash2, 
   Download, Filter, Target, Edit3, Lightbulb, Loader2, 
   Settings, BrainCircuit, Sparkles, MessageSquare, Bot, ArrowRight,
-  Calculator, Moon, Sun, LayoutGrid, PieChart as PieIcon, UserCircle, Repeat, CheckCircle, Globe
+  Calculator, Moon, Sun, LayoutGrid, PieChart as PieIcon, UserCircle, Repeat, CheckCircle, Globe, Camera
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -34,22 +34,26 @@ import {
 } from "firebase/firestore";
 
 // --- Firebase Configuration ---
-// Updated with your provided Browser Key
-const firebaseConfig = {
-  apiKey: "AIzaSyDNKg65VDw5GL48D5X4DB9maFG49DupAeM", 
-  authDomain: "richr-d5cfc.firebaseapp.com",
-  projectId: "richr-d5cfc",
-  storageBucket: "richr-d5cfc.firebasestorage.app",
-  messagingSenderId: "1031148718480",
-  appId: "1:1031148718480:web:96072659913fa7b4b58b15",
-  measurementId: "G-PLJ99FLJPD"
-};
+let firebaseConfig;
+try {
+  firebaseConfig = JSON.parse(__firebase_config);
+} catch (e) {
+  firebaseConfig = {
+    apiKey: "AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY", 
+    authDomain: "richr-d5cfc.firebaseapp.com",
+    projectId: "richr-d5cfc",
+    storageBucket: "richr-d5cfc.firebasestorage.app",
+    messagingSenderId: "1031148718480",
+    appId: "1:1031148718480:web:96072659913fa7b4b58b15",
+    measurementId: "G-PLJ99FLJPD"
+  };
+}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v41-keys-updated';
+const appId = 'richr-v42-profile-url';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -285,11 +289,19 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
              <div className={`w-full max-w-2xl h-[600px] flex flex-col rounded-2xl shadow-2xl overflow-hidden animate-fade-in-up ${isDark ? 'bg-slate-900 border border-slate-700' : 'bg-white border border-gray-200'}`}>
                 <div className={`p-6 border-b flex justify-between items-start ${isDark ? 'border-slate-800' : 'border-gray-100'}`}>
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-2xl font-bold text-white shadow-lg">
-                            {userData.name ? userData.name[0].toUpperCase() : 'U'}
+                        {/* Profile Picture or Initial */}
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-2xl font-bold text-white shadow-lg overflow-hidden border-2 border-white/10">
+                            {userData.profilePic ? (
+                                <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" onError={(e) => e.target.style.display = 'none'} />
+                            ) : (
+                                userData.name ? userData.name[0].toUpperCase() : 'U'
+                            )}
                         </div>
                         <div>
-                            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>
+                            <div className="flex items-center gap-2">
+                                <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>
+                                {userData.username && <span className="text-xs text-slate-500">@{userData.username}</span>}
+                            </div>
                             <p className="text-sm text-slate-500">{userData.email || "Richr User"}</p>
                             <div className="flex gap-2 mt-2">
                                 <span className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">{userData.goal || "Saver"}</span>
@@ -320,6 +332,8 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                         {activeTab === 'profile' && (
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
+                                <div><label className="text-xs text-slate-500">Username (Unique URL)</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} placeholder="username" /></div>
+                                <div><label className="text-xs text-slate-500">Profile Picture URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} placeholder="https://..." /></div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                     <div><label className="text-xs text-slate-500">Fixed Expenses</label><input type="number" value={editData.expenses} onChange={e => setEditData({...editData, expenses: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
@@ -411,43 +425,12 @@ const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate })
     }
     return result;
   }, []);
-
-  const dataMap = useMemo(() => {
-    const map = {};
-    transactions.forEach(tx => { 
-        if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; 
-    });
-    return map;
-  }, [transactions]);
-
-  const getColor = (dateStr) => {
-    if (!dateStr) return "invisible";
-    const amount = dataMap[dateStr] || 0;
-    if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200";
-    if (amount < 500) return "bg-emerald-900";
-    if (amount < 2000) return "bg-emerald-600";
-    return "bg-emerald-400";
-  };
-
+  const dataMap = useMemo(() => { const map = {}; transactions.forEach(tx => { if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; }); return map; }, [transactions]);
+  const getColor = (dateStr) => { if (!dateStr) return "invisible"; const amount = dataMap[dateStr] || 0; if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200"; if (amount < 500) return "bg-emerald-900"; if (amount < 2000) return "bg-emerald-600"; return "bg-emerald-400"; };
   return (
     <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-       <div className="flex gap-6 min-w-max">
-           {monthsData.map((m, idx) => (
-               <div key={idx} className="flex flex-col gap-2">
-                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span>
-                   <div className="grid grid-cols-7 gap-1">
-                       {m.days.map((d, i) => (
-                           <div 
-                               key={i} 
-                               title={d ? `${d}: ₹${dataMap[d]||0}` : ''}
-                               onClick={() => d && onDateClick(d)}
-                               className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}
-                           />
-                       ))}
-                   </div>
-               </div>
-           ))}
-       </div>
+       <div className="flex gap-6 min-w-max">{monthsData.map((m, idx) => (<div key={idx} className="flex flex-col gap-2"><span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span><div className="grid grid-cols-7 gap-1">{m.days.map((d, i) => (<div key={i} title={d ? `${d}: ₹${dataMap[d]||0}` : ''} onClick={() => d && onDateClick(d)} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}/>))}</div></div>))}</div>
+       <div className={`flex gap-2 items-center text-[10px] mt-3 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}><span>Less</span><div className={`w-2 h-2 ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`}></div><div className="w-2 h-2 bg-emerald-900"></div><div className="w-2 h-2 bg-emerald-600"></div><div className="w-2 h-2 bg-emerald-400"></div><span>More</span></div>
     </div>
   );
 };
@@ -489,18 +472,22 @@ export default function RichrApp() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Data
-  const [userData, setUserData] = useState({ name: '', age: '', income: 0, expenses: 0, goal: '', currentSavings: 0, debt: 0, assets: 0 });
+  const [userData, setUserData] = useState({ name: '', age: '', income: 0, expenses: 0, goal: '', currentSavings: 0, debt: 0, assets: 0, username: '', profilePic: '' });
   const [transactions, setTransactions] = useState([]);
   
   // UI State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY'); // Default key
+  const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY');
   
   // Dashboard Utils
   const [categoryFilter, setCategoryFilter] = useState('All');
-  const [selectedDate, setSelectedDate] = useState(null); // NEW: Track selected date
+  const [selectedDate, setSelectedDate] = useState(null); 
   const [dashboardViewMode, setDashboardViewMode] = useState('heatmap');
+  
+  // Quote State
+  const [showQuote, setShowQuote] = useState(true);
+  const dailyQuote = useMemo(() => getDailyQuote(), []);
   
   // Forms & Modals
   const [manualFormData, setManualFormData] = useState({ name: '', age: '', income: '', expenses: '', goal: '', currentSavings: '', debt: '', assets: '' });
@@ -509,6 +496,13 @@ export default function RichrApp() {
   const [txDate, setTxDate] = useState(formatDate(new Date())); 
   const [isRecurring, setIsRecurring] = useState(false);
   const [newTransClass, setNewTransClass] = useState('Want'); 
+
+  // --- URL HISTORY UPDATE ---
+  useEffect(() => {
+    if (userData.username) {
+        window.history.pushState({}, '', `/${userData.username}`);
+    }
+  }, [userData.username]);
 
   // --- Auth Listener ---
   useEffect(() => {
@@ -576,7 +570,8 @@ export default function RichrApp() {
         currentSavings: parseFloat(manualFormData.currentSavings) || 0,
         debt: parseFloat(manualFormData.debt) || 0,
         assets: parseFloat(manualFormData.assets) || 0,
-        geminiKey: geminiKey
+        geminiKey: geminiKey,
+        username: manualFormData.name.toLowerCase().replace(/\s+/g, '')
     });
   };
   
@@ -593,7 +588,7 @@ export default function RichrApp() {
   }, [transactions]);
   const budgetHealth = useMemo(() => userData.income ? Math.min((stats.monthly / userData.income) * 100, 100) : 0, [stats.monthly, userData.income]);
 
-  // --- FILTERING LOGIC (UPDATED FOR INTERACTIVITY) ---
+  // --- FILTERING LOGIC ---
   const filteredTransactions = useMemo(() => {
       let filtered = transactions.filter(t => categoryFilter === 'All' || t.tag === categoryFilter || (categoryFilter === 'Income' && t.category === 'Income'));
       if (selectedDate) {
@@ -672,11 +667,13 @@ export default function RichrApp() {
       <nav className={`p-6 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
         <div className="flex items-center gap-2"><Activity className="text-emerald-500" /><span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span></div>
         <div className="flex items-center gap-4">
-            <button onClick={() => setIsProfileOpen(true)} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform">{userData.name ? userData.name[0].toUpperCase() : 'U'}</button>
+            <button onClick={() => setIsProfileOpen(true)} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
+                {userData.profilePic ? <img src={userData.profilePic} className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
+            </button>
         </div>
       </nav>
       <main className="max-w-7xl mx-auto p-6">
-        <QuoteBanner quote={getDailyQuote()} isVisible={true} onClose={() => {}} onShow={() => {}} isDark={isDarkMode} />
+        <QuoteBanner quote={getDailyQuote()} isVisible={showQuote} onClose={() => setShowQuote(false)} onShow={() => setShowQuote(true)} isDark={isDarkMode} />
         
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <Card className="col-span-1 bg-gradient-to-br from-emerald-900/40 to-slate-800" isDark={isDarkMode}>
@@ -731,7 +728,7 @@ export default function RichrApp() {
                         </select></div>
                     </div>
                     {/* Transaction List */}
-                    <div className="space-y-4 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-6 max-h-[450px] overflow-y-auto pr-2 custom-scrollbar">
                         {groupedTransactions.map(group => (
                             <div key={group.date}>
                                 <div className={`sticky top-0 z-10 py-1 px-3 mb-2 text-xs font-bold uppercase tracking-wider flex justify-between rounded ${isDarkMode ? 'bg-slate-800/80 text-slate-400 backdrop-blur-md' : 'bg-gray-100 text-gray-500'}`}>

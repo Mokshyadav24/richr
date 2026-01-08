@@ -18,7 +18,9 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  setPersistence,
+  browserLocalPersistence
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -53,7 +55,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v44-fixes-final';
+const appId = 'richr-v45-persistence-fix';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -117,7 +119,8 @@ const getFinancialContext = (transactions, userData) => {
     `;
 };
 
-// --- Components ---
+// --- Components (Defined BEFORE Usage) ---
+
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -144,9 +147,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
-// --- SUB-COMPONENTS ---
-
-const QuoteBanner = ({ quote, onClose, isVisible, isDark }) => {
+const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
   if (!isVisible) return null;
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
@@ -159,6 +160,8 @@ const QuoteBanner = ({ quote, onClose, isVisible, isDark }) => {
     </div>
   );
 };
+
+// --- SUB-COMPONENTS ---
 
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
@@ -587,12 +590,13 @@ export default function RichrApp() {
   
   const handleLogout = async () => {
     try {
-        await signOut(auth);
+        // Stop listening to data before signing out
         setUser(null);
         setView('auth');
         setUserData({});
         setTransactions([]);
         setIsProfileOpen(false);
+        await signOut(auth);
     } catch (error) {
         console.error("Logout error", error);
     }

@@ -53,7 +53,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v45-fix-refs';
+const appId = 'richr-v44-fixes-final';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -117,8 +117,7 @@ const getFinancialContext = (transactions, userData) => {
     `;
 };
 
-// --- Components (Defined BEFORE Usage) ---
-
+// --- Components ---
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -145,8 +144,10 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
-const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 right-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
+// --- SUB-COMPONENTS ---
+
+const QuoteBanner = ({ quote, onClose, isVisible, isDark }) => {
+  if (!isVisible) return null;
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
         <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
@@ -157,87 +158,6 @@ const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
         <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
     </div>
   );
-};
-
-const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
-  const monthsData = useMemo(() => {
-    const today = new Date();
-    const result = [];
-    for (let i = 3; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const monthName = d.toLocaleString('default', { month: 'short' });
-        const year = d.getFullYear();
-        const daysInMonth = [];
-        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
-        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
-        for(let j=1; j<=monthEnd.getDate(); j++) {
-            const current = new Date(d.getFullYear(), d.getMonth(), j);
-            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
-        }
-        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
-    }
-    return result;
-  }, []);
-
-  const dataMap = useMemo(() => {
-    const map = {};
-    transactions.forEach(tx => { 
-        if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; 
-    });
-    return map;
-  }, [transactions]);
-
-  const getColor = (dateStr) => {
-    if (!dateStr) return "invisible";
-    const amount = dataMap[dateStr] || 0;
-    if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200";
-    if (amount < 500) return "bg-emerald-900";
-    if (amount < 2000) return "bg-emerald-600";
-    return "bg-emerald-400";
-  };
-
-  return (
-    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-       <div className="flex gap-6 min-w-max">
-           {monthsData.map((m, idx) => (
-               <div key={idx} className="flex flex-col gap-2">
-                   <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span>
-                   <div className="grid grid-cols-7 gap-1">
-                       {m.days.map((d, i) => (
-                           <div 
-                               key={i} 
-                               title={d ? `${d}: ₹${dataMap[d]||0}` : ''}
-                               onClick={() => d && onDateClick(d)}
-                               className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}
-                           />
-                       ))}
-                   </div>
-               </div>
-           ))}
-       </div>
-    </div>
-  );
-};
-
-const BudgetPieChart = ({ transactions, isDark }) => {
-    const currentMonthStr = getMonthStr(new Date());
-    const data = useMemo(() => {
-        const buckets = { Need: 0, Want: 0, Investment: 0 };
-        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
-            const type = t.typeClass || guessBudgetCategory(t.tag);
-            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
-        });
-        return buckets;
-    }, [transactions, currentMonthStr]);
-    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
-    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
-    return (
-        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
-            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
-            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
-        </div>
-    );
 };
 
 const Calculators = ({ isDark }) => {
@@ -487,6 +407,56 @@ const ChatBot = ({ userData, transactions, geminiKey, isDark, onClose }) => {
     );
 };
 
+const ConsistencyHeatmap = ({ transactions, isDark, onDateClick, selectedDate }) => {
+  const monthsData = useMemo(() => {
+    const today = new Date();
+    const result = [];
+    for (let i = 3; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthName = d.toLocaleString('default', { month: 'short' });
+        const year = d.getFullYear();
+        const daysInMonth = [];
+        const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+        const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        for(let j=0; j<monthStart.getDay(); j++) daysInMonth.push(null);
+        for(let j=1; j<=monthEnd.getDate(); j++) {
+            const current = new Date(d.getFullYear(), d.getMonth(), j);
+            if (current <= today || i > 0) daysInMonth.push(formatDate(current));
+        }
+        result.push({ name: `${monthName} '${year.toString().slice(-2)}`, days: daysInMonth });
+    }
+    return result;
+  }, []);
+  const dataMap = useMemo(() => { const map = {}; transactions.forEach(tx => { if (tx.category === 'Expense') map[tx.dateStr] = (map[tx.dateStr] || 0) + tx.amount; }); return map; }, [transactions]);
+  const getColor = (dateStr) => { if (!dateStr) return "invisible"; const amount = dataMap[dateStr] || 0; if (amount === 0) return isDark ? "bg-slate-800" : "bg-gray-200"; if (amount < 500) return "bg-emerald-900"; if (amount < 2000) return "bg-emerald-600"; return "bg-emerald-400"; };
+  return (
+    <div className={`mt-4 p-4 rounded-xl border w-full overflow-x-auto custom-scrollbar ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+       <div className="flex gap-6 min-w-max">{monthsData.map((m, idx) => (<div key={idx} className="flex flex-col gap-2"><span className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-slate-600'}`}>{m.name}</span><div className="grid grid-cols-7 gap-1">{m.days.map((d, i) => (<div key={i} title={d ? `${d}: ₹${dataMap[d]||0}` : ''} onClick={() => d && onDateClick(d)} className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-[1px] ${getColor(d)} transition-all hover:scale-125 cursor-pointer ${selectedDate === d ? 'ring-2 ring-white z-10' : ''}`}/>))}</div></div>))}</div>
+       <div className={`flex gap-2 items-center text-[10px] mt-3 ${isDark ? 'text-slate-600' : 'text-slate-400'}`}><span>Less</span><div className={`w-2 h-2 ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`}></div><div className="w-2 h-2 bg-emerald-900"></div><div className="w-2 h-2 bg-emerald-600"></div><div className="w-2 h-2 bg-emerald-400"></div><span>More</span></div>
+    </div>
+  );
+};
+
+const BudgetPieChart = ({ transactions, isDark }) => {
+    const currentMonthStr = getMonthStr(new Date());
+    const data = useMemo(() => {
+        const buckets = { Need: 0, Want: 0, Investment: 0 };
+        transactions.filter(t => t.monthStr === currentMonthStr && t.category === 'Expense').forEach(t => {
+            const type = t.typeClass || guessBudgetCategory(t.tag);
+            if (buckets[type] !== undefined) buckets[type] += t.amount; else buckets['Want'] += t.amount;
+        });
+        return buckets;
+    }, [transactions, currentMonthStr]);
+    const total = Object.values(data).reduce((a,b) => a+b, 0) || 1;
+    const needEnd = (data.Need / total) * 100; const wantEnd = needEnd + (data.Want / total) * 100;
+    return (
+        <div className={`mt-4 p-6 rounded-xl border w-full flex items-center justify-around ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="relative w-32 h-32 rounded-full shadow-lg" style={{ background: `conic-gradient(#10b981 0% ${needEnd}%, #f59e0b ${needEnd}% ${wantEnd}%, #3b82f6 ${wantEnd}% 100%)` }}><div className={`absolute inset-4 rounded-full flex items-center justify-center flex-col ${isDark ? 'bg-slate-900' : 'bg-white'}`}><span className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Total</span><span className={`font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{total.toLocaleString()}</span></div></div>
+            <div className="flex flex-col gap-3 text-sm"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Needs: ₹{data.Need.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Wants: ₹{data.Want.toLocaleString()}</span></div><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></div><span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Invest: ₹{data.Investment.toLocaleString()}</span></div></div>
+        </div>
+    );
+};
+
 // --- Main App ---
 
 export default function RichrApp() {
@@ -549,13 +519,16 @@ export default function RichrApp() {
 
   // --- Auth Listener ---
   useEffect(() => {
+    let unsubProfile;
+    let unsubTrans;
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
         if (view === 'auth') setView('loading'); 
         
-        const profileRef = doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'main');
-        onSnapshot(profileRef, (snap) => {
+        // Listen to Profile
+        unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'main'), (snap) => {
           if (snap.exists()) {
             setUserData(snap.data());
             if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
@@ -565,7 +538,9 @@ export default function RichrApp() {
             setView('setup');
           }
         });
-        onSnapshot(collection(db, 'artifacts', appId, 'users', u.uid, 'transactions'), (snap) => {
+
+        // Listen to Transactions
+        unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'users', u.uid, 'transactions'), (snap) => {
           const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
           txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
           setTransactions(txs);
@@ -573,9 +548,18 @@ export default function RichrApp() {
       } else {
         setUser(null);
         setView('auth');
+        setUserData({});
+        setTransactions([]);
+        if(unsubProfile) unsubProfile();
+        if(unsubTrans) unsubTrans();
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribe();
+        if(unsubProfile) unsubProfile();
+        if(unsubTrans) unsubTrans();
+    };
   }, []);
 
   const checkAndProcessSubscriptions = async (uid) => {
@@ -601,6 +585,19 @@ export default function RichrApp() {
   const handleGoogleAuth = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInWithPopup(auth, googleProvider); } catch (err) { setErrorMsg("Google Sign-In Error."); console.error(err); setIsSubmitting(false); } };
   const handleGuestLogin = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInAnonymously(auth); } catch (err) { console.error(err); setErrorMsg("Guest Auth failed."); setIsSubmitting(false); } };
   
+  const handleLogout = async () => {
+    try {
+        await signOut(auth);
+        setUser(null);
+        setView('auth');
+        setUserData({});
+        setTransactions([]);
+        setIsProfileOpen(false);
+    } catch (error) {
+        console.error("Logout error", error);
+    }
+  };
+
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;
@@ -688,7 +685,7 @@ export default function RichrApp() {
       <Card className="w-full max-w-lg" isDark={isDarkMode}>
         <div className="flex justify-between items-center mb-6">
             <h2 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Complete Profile</h2>
-            <button onClick={() => signOut(auth)} className="text-red-400 hover:text-red-300 flex items-center gap-1 text-sm"><LogOut size={16}/> Logout</button>
+            <button onClick={handleLogout} className="text-red-400 hover:text-red-300 flex items-center gap-1 text-sm"><LogOut size={16}/> Logout</button>
         </div>
         <p className="text-sm text-slate-500 mb-6">To help Richr give you the best insights.</p>
         <form onSubmit={handleProfileSubmit} className="space-y-4">
@@ -799,7 +796,7 @@ export default function RichrApp() {
                                     {group.items.map((tx) => (
                                         <div key={tx.id} className={`group flex justify-between items-center p-4 rounded-xl transition-all border ${isDarkMode ? 'border-transparent hover:bg-slate-800/80 hover:border-slate-700' : 'border-transparent hover:bg-gray-50 hover:border-gray-200'}`}>
                                             <div className="flex items-center gap-4">
-                                                <div className={`p-3 rounded-xl ${tx.category === 'Expense' ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{tx.category === 'Expense' ? <CreditCard size={20} /> : <DollarSign size={20} />}</div>
+                                                <div className={`p-3 rounded-xl ${tx.category === 'Expense' ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>{tx.category === 'Expense' ? <CreditCard size={18} /> : <DollarSign size={18} />}</div>
                                                 <div>
                                                     <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{tx.title}</p>
                                                     <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -826,7 +823,7 @@ export default function RichrApp() {
       <Button variant="chat" onClick={() => setIsChatOpen(true)} icon={MessageSquare}>Chat with Richr</Button>
       {isChatOpen && <ChatBot userData={userData} transactions={transactions} geminiKey={geminiKey} isDark={isDarkMode} onClose={() => setIsChatOpen(false)} />}
       
-      {isProfileOpen && <ProfileModal userData={userData} userId={user.uid} isDark={isDarkMode} onClose={() => setIsProfileOpen(false)} onSaveSettings={saveSettings} onLogout={() => signOut(auth)} geminiKey={geminiKey} setGeminiKey={setGeminiKey} setIsDarkMode={setIsDarkMode} onUpdateProfile={handleUpdateProfile} initialTab={profileInitialTab} />}
+      {isProfileOpen && <ProfileModal userData={userData} userId={user.uid} isDark={isDarkMode} onClose={() => setIsProfileOpen(false)} onSaveSettings={saveSettings} onLogout={handleLogout} geminiKey={geminiKey} setGeminiKey={setGeminiKey} setIsDarkMode={setIsDarkMode} onUpdateProfile={handleUpdateProfile} initialTab={profileInitialTab} />}
 
       {isAddModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

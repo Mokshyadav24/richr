@@ -18,9 +18,7 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup,
-  setPersistence,
-  browserLocalPersistence
+  signInWithPopup
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -55,7 +53,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-v45-persistence-fix';
+const appId = 'richr-prod-v1'; // Stable Production ID
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -66,19 +64,20 @@ const FINANCIAL_QUOTES = [
   "Do not save what is left after spending, but spend what is left after saving. - Warren Buffett",
   "Beware of little expenses. A small leak will sink a great ship. - Benjamin Franklin",
   "The stock market is designed to transfer money from the Active to the Patient. - Warren Buffett",
-  "It's not how much money you make, but how much money you keep. - Robert Kiyosaki"
+  "It's not how much money you make, but how much money you keep. - Robert Kiyosaki",
+  "The goal isn’t more money. The goal is living life on your terms. - Chris Brogan"
 ];
 
 const getDailyQuote = () => FINANCIAL_QUOTES[new Date().getDate() % FINANCIAL_QUOTES.length];
 
-const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income'];
+const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income', 'Loan Repayment', 'Investment'];
 
 const guessBudgetCategory = (tag) => {
     const lower = tag.toLowerCase();
     if (lower === 'income') return 'Income';
-    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel'].includes(lower)) return 'Need';
+    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel', 'loan repayment', 'emi'].includes(lower)) return 'Need';
     if (['food', 'entertainment', 'shopping', 'travel', 'hobbies'].includes(lower)) return 'Want';
-    if (['investment', 'stocks', 'sip', 'gold'].includes(lower)) return 'Investment';
+    if (['investment', 'stocks', 'sip', 'gold', 'mutual fund'].includes(lower)) return 'Investment';
     return 'Want'; 
 };
 
@@ -102,10 +101,17 @@ const callGeminiFlash = async (apiKey, prompt) => {
 const getFinancialContext = (transactions, userData) => {
     const totalIncome = userData.income || 0;
     const totalExpenses = transactions.filter(t => t.category === 'Expense').reduce((sum, t) => sum + t.amount, 0);
+    
+    // Group expenses by tag
     const catBreakdown = transactions.reduce((acc, t) => {
         if(t.category === 'Expense') acc[t.tag] = (acc[t.tag] || 0) + t.amount;
         return acc;
     }, {});
+    
+    // Calculate Net Worth
+    const assets = userData.assets || 0;
+    const debt = userData.debt || 0;
+    const netWorth = assets - debt;
     
     const recentTx = transactions.slice(0, 5).map(t => `${t.dateStr}: ${t.title} (${t.amount})`).join(", ");
 
@@ -113,7 +119,9 @@ const getFinancialContext = (transactions, userData) => {
       Profile: ${userData.name}, Age: ${userData.age}, Goal: ${userData.goal}
       Monthly Income: ₹${totalIncome}
       Total Expenses (All Time): ₹${totalExpenses}
-      Savings Rate: ${totalIncome > 0 ? Math.round(((totalIncome - totalExpenses)/totalIncome)*100) : 0}%
+      Total Debt: ₹${debt}
+      Total Assets: ₹${assets}
+      Net Worth: ₹${netWorth}
       Category Breakdown: ${JSON.stringify(catBreakdown)}
       Recent Activity: ${recentTx}
     `;
@@ -134,7 +142,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   const variants = {
     primary: "bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/20",
     secondary: isDark ? "bg-slate-700 hover:bg-slate-600 text-slate-200" : "bg-gray-100 hover:bg-gray-200 text-gray-700",
-    white: "bg-white hover:bg-slate-100 text-slate-900 shadow-lg",
+    white: "bg-white hover:bg-slate-100 text-slate-900 shadow-lg border border-gray-200",
     danger: "bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/50",
     ghost: isDark ? "bg-transparent hover:bg-slate-700/50 text-slate-400 hover:text-white" : "bg-transparent hover:bg-gray-100 text-gray-500 hover:text-gray-900",
     chat: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 rounded-full p-3 fixed bottom-6 right-6 z-50"
@@ -148,7 +156,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
 };
 
 const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return null;
+  if (!isVisible) return <button onClick={onShow} className={`p-2 rounded-full transition-colors ${isDark ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}><Lightbulb size={20} /></button>;
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
         <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
@@ -161,8 +169,7 @@ const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
   );
 };
 
-// --- SUB-COMPONENTS ---
-
+// --- CALCULATORS ---
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
     const [values, setValues] = useState({ p: 5000, r: 12, n: 5 }); 
@@ -207,9 +214,8 @@ const Calculators = ({ isDark }) => {
             </div>
             {result && (
                 <div className={`p-4 rounded-xl border animate-fade-in-up ${isDark ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
-                    {mode === 'sip' && (<><div className="flex justify-between mb-2"><span className="text-slate-500">Invested</span><span className="font-bold">₹{result.invested.toLocaleString()}</span></div><div className="flex justify-between mb-2"><span className="text-slate-500">Est. Returns</span><span className="font-bold text-emerald-500">+₹{result.gain.toLocaleString()}</span></div><div className="flex justify-between pt-2 border-t border-slate-700/30"><span className="text-slate-400 font-medium">Total Value</span><span className="font-bold text-xl">₹{result.total.toLocaleString()}</span></div></>)}
-                    {mode === 'loan' && (<><div className="flex justify-between mb-2"><span className="text-slate-500">Monthly EMI</span><span className="font-bold text-red-400">₹{result.emi.toLocaleString()}</span></div><div className="flex justify-between mb-2"><span className="text-slate-500">Total Interest</span><span className="font-bold text-red-400">₹{result.interest.toLocaleString()}</span></div><div className="flex justify-between pt-2 border-t border-slate-700/30"><span className="text-slate-400 font-medium">Total Payable</span><span className="font-bold text-xl">₹{result.total.toLocaleString()}</span></div></>)}
-                    {mode === 'swp' && (<div className="text-center"><p className="text-xs text-slate-500">{result.note}</p><h3 className="text-2xl font-bold text-emerald-500 mt-1">₹{result.total.toLocaleString()}</h3></div>)}
+                     <div className="flex justify-between mb-2"><span className="text-slate-500">{mode === 'loan' ? 'Monthly EMI' : 'Total Value'}</span><span className="font-bold text-xl">₹{mode === 'loan' ? result.emi.toLocaleString() : result.total.toLocaleString()}</span></div>
+                     <p className="text-xs text-slate-500 text-center mt-2">{mode === 'loan' ? `Total Interest: ₹${result.interest.toLocaleString()}` : `Est. Returns: ₹${(result.gain || 0).toLocaleString()}`}</p>
                 </div>
             )}
         </div>
@@ -223,8 +229,7 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     useEffect(() => {
         if(!userId) return;
         const unsub = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), (snap) => {
-            const list = snap.docs.map(d => ({id: d.id, ...d.data()}));
-            setSubs(list);
+            setSubs(snap.docs.map(d => ({id: d.id, ...d.data()})));
         });
         return () => unsub();
     }, [userId]);
@@ -232,61 +237,33 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     const addSub = async () => {
         if(!newSub.title || !newSub.amount) return;
         await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), {
-            title: newSub.title,
-            amount: parseFloat(newSub.amount),
-            day: parseInt(newSub.day),
-            createdAt: serverTimestamp(),
-            tag: 'Bills' 
+            title: newSub.title, amount: parseFloat(newSub.amount), day: parseInt(newSub.day), createdAt: serverTimestamp(), tag: 'Bills' 
         });
         setNewSub({ title: '', amount: '', day: 1 });
     };
 
-    const deleteSub = async (id) => {
-        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'subscriptions', id));
-    };
-
+    const deleteSub = async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'subscriptions', id));
     const totalSubs = subs.reduce((a, b) => a + (b.amount || 0), 0);
 
     return (
         <div className="space-y-6">
             <div className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200'}`}>
-                <div>
-                    <h4 className={`text-sm font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Total Monthly Subscriptions</h4>
-                    <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{totalSubs.toLocaleString()}</p>
-                </div>
+                <div><h4 className={`text-sm font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Total Monthly Subscriptions</h4><p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{totalSubs.toLocaleString()}</p></div>
                 <div className="p-2 bg-indigo-500 rounded-lg text-white"><Repeat size={24} /></div>
             </div>
-
             <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
                 {subs.map(s => (
                     <div key={s.id} className={`flex justify-between items-center p-3 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-                        <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'}`}>{s.day}</div>
-                            <div>
-                                <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{s.title}</p>
-                                <p className="text-[10px] text-slate-500">Auto-renews monthly</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="font-bold text-sm">₹{s.amount}</span>
-                            <button onClick={() => deleteSub(s.id)} className="text-slate-500 hover:text-red-500"><Trash2 size={14}/></button>
-                        </div>
+                        <div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'}`}>{s.day}</div><div><p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{s.title}</p><p className="text-[10px] text-slate-500">Auto-renews monthly</p></div></div>
+                        <div className="flex items-center gap-3"><span className="font-bold text-sm">₹{s.amount}</span><button onClick={() => deleteSub(s.id)} className="text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
                     </div>
                 ))}
                 {subs.length === 0 && <p className="text-center text-xs text-slate-500 py-4">No active subscriptions.</p>}
             </div>
-
             <div className={`p-4 rounded-xl border space-y-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-50 border-gray-200'}`}>
                 <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Add New</h4>
-                <div className="grid grid-cols-2 gap-3">
-                    <input type="text" placeholder="App Name (e.g. Netflix)" value={newSub.title} onChange={e => setNewSub({...newSub, title: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
-                    <input type="number" placeholder="Amount (₹)" value={newSub.amount} onChange={e => setNewSub({...newSub, amount: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
-                </div>
-                <div className="flex items-center gap-3">
-                    <label className="text-xs text-slate-500">Day of Month:</label>
-                    <input type="number" min="1" max="31" value={newSub.day} onChange={e => setNewSub({...newSub, day: e.target.value})} className={`w-16 p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
-                    <Button onClick={addSub} size="sm" className="flex-1">Add Subscription</Button>
-                </div>
+                <div className="grid grid-cols-2 gap-3"><input type="text" placeholder="App Name" value={newSub.title} onChange={e => setNewSub({...newSub, title: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /><input type="number" placeholder="Amt" value={newSub.amount} onChange={e => setNewSub({...newSub, amount: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /></div>
+                <div className="flex items-center gap-3"><input type="number" min="1" max="31" value={newSub.day} onChange={e => setNewSub({...newSub, day: e.target.value})} className={`w-16 p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /><Button onClick={addSub} size="sm" className="flex-1">Add Subscription</Button></div>
             </div>
         </div>
     );
@@ -295,11 +272,7 @@ const SubscriptionsManager = ({ userId, isDark }) => {
 const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, geminiKey, setGeminiKey, setIsDarkMode, userId, onUpdateProfile, initialTab }) => {
     const [activeTab, setActiveTab] = useState(initialTab || 'calculators');
     const [editData, setEditData] = useState(userData);
-
-    const handleProfileUpdate = () => {
-        onUpdateProfile(editData);
-        alert("Profile Updated!");
-    };
+    const handleProfileUpdate = () => { onUpdateProfile(editData); alert("Profile Updated!"); };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -314,49 +287,35 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                             )}
                         </div>
                         <div>
-                            <div className="flex items-center gap-2">
-                                <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>
-                                {userData.username && <span className="text-xs text-slate-500">@{userData.username}</span>}
-                            </div>
+                            <div className="flex items-center gap-2"><h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>{userData.username && <span className="text-xs text-slate-500">@{userData.username}</span>}</div>
                             <p className="text-sm text-slate-500">{userData.email || "Richr User"}</p>
-                            <div className="flex gap-2 mt-2">
-                                <span className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">{userData.goal || "Saver"}</span>
-                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-500"><X size={20}/></button>
                 </div>
-
                 <div className="flex flex-1 overflow-hidden">
                     <div className={`w-48 p-4 border-r space-y-2 ${isDark ? 'bg-slate-950/50 border-slate-800' : 'bg-gray-50 border-gray-100'}`}>
                         <button onClick={() => setActiveTab('calculators')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'calculators' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Calculator size={16}/> Tools</button>
-                        <button onClick={() => setActiveTab('subscriptions')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'subscriptions' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Repeat size={16}/> Subscriptions</button>
-                        <button onClick={() => setActiveTab('profile')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><UserCircle size={16}/> Edit Profile</button>
+                        <button onClick={() => setActiveTab('subscriptions')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'subscriptions' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Repeat size={16}/> Subs</button>
+                        <button onClick={() => setActiveTab('profile')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><UserCircle size={16}/> Profile</button>
                         <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Settings size={16}/> Settings</button>
-                        <div className="pt-4 mt-4 border-t border-slate-800/50">
-                            <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 flex items-center gap-2"><LogOut size={16}/> Logout</button>
-                        </div>
+                        <div className="pt-4 mt-4 border-t border-slate-800/50"><button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 flex items-center gap-2"><LogOut size={16}/> Logout</button></div>
                     </div>
-
                     <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-                        {activeTab === 'calculators' && (
-                            <div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Financial Calculators</h3><Calculators isDark={isDark} /></div>
-                        )}
-                        {activeTab === 'subscriptions' && (
-                             <div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Subscription Manager</h3><SubscriptionsManager userId={userId} isDark={isDark} /></div>
-                        )}
+                        {activeTab === 'calculators' && (<div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Financial Calculators</h3><Calculators isDark={isDark} /></div>)}
+                        {activeTab === 'subscriptions' && (<div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Subscription Manager</h3><SubscriptionsManager userId={userId} isDark={isDark} /></div>)}
                         {activeTab === 'profile' && (
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
-                                <div><label className="text-xs text-slate-500">Username</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                <div><label className="text-xs text-slate-500">Username (Unique URL)</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div><label className="text-xs text-slate-500">Profile Pic URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                     <div><label className="text-xs text-slate-500">Fixed Expenses</label><input type="number" value={editData.expenses} onChange={e => setEditData({...editData, expenses: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-500">Total Debt</label><input type="number" value={editData.debt} onChange={e => setEditData({...editData, debt: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
-                                    <div><label className="text-xs text-slate-500">Total Assets</label><input type="number" value={editData.assets} onChange={e => setEditData({...editData, assets: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Debt</label><input type="number" value={editData.debt} onChange={e => setEditData({...editData, debt: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Assets</label><input type="number" value={editData.assets} onChange={e => setEditData({...editData, assets: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 </div>
                                 <div><label className="text-xs text-slate-500">Goal</label><input type="text" value={editData.goal} onChange={e => setEditData({...editData, goal: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <Button onClick={handleProfileUpdate} className="w-full">Update Profile</Button>
@@ -367,13 +326,9 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>App Settings</h3>
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-700/50">
                                     <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Appearance</span>
-                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={() => setIsDarkMode(!isDark)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
                                 </div>
-                                <div>
-                                    <label className="text-xs text-slate-500 block mb-2">Gemini API Key</label>
-                                    <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className={`w-full p-3 rounded-xl outline-none ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-gray-50 border-gray-200'}`} placeholder="AIza..." />
-                                    <Button onClick={onSaveSettings} className="mt-4 w-full">Save Key</Button>
-                                </div>
+                                <div><label className="text-xs text-slate-500 block mb-2">Gemini API Key</label><input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className={`w-full p-3 rounded-xl outline-none ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-gray-50 border-gray-200'}`} placeholder="AIza..." /><Button onClick={onSaveSettings} className="mt-4 w-full">Save Key</Button></div>
                             </div>
                         )}
                     </div>
@@ -466,18 +421,10 @@ export default function RichrApp() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('loading'); 
   const [authMode, setAuthMode] = useState('login');
-  
-  // Theme State
   const [isDarkMode, setIsDarkMode] = useState(true);
   
-  // Auth Form
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Data
-  const [userData, setUserData] = useState({ name: '', age: '', income: 0, expenses: 0, goal: '', currentSavings: 0, debt: 0, assets: 0, username: '', profilePic: '' });
+  // Data State
+  const [userData, setUserData] = useState({});
   const [transactions, setTransactions] = useState([]);
   
   // UI State
@@ -486,16 +433,18 @@ export default function RichrApp() {
   const [profileInitialTab, setProfileInitialTab] = useState('profile');
   const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY');
   
-  // Dashboard Utils
+  // Dashboard State
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [selectedDate, setSelectedDate] = useState(null); 
   const [dashboardViewMode, setDashboardViewMode] = useState('heatmap');
-  
-  // Quote State
   const [showQuote, setShowQuote] = useState(true);
   const dailyQuote = useMemo(() => getDailyQuote(), []);
   
-  // Forms & Modals
+  // Forms
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [manualFormData, setManualFormData] = useState({ name: '', age: '', income: '', expenses: '', goal: '', currentSavings: '', debt: '', assets: '' });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newTransType, setNewTransType] = useState('expense');
@@ -503,67 +452,59 @@ export default function RichrApp() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [newTransClass, setNewTransClass] = useState('Want'); 
 
-  // --- URL HISTORY UPDATE ---
+  // --- URL Update ---
   useEffect(() => {
-    if (userData.username) {
-        window.history.pushState({}, '', `/${userData.username}`);
-    }
+    if (userData.username) window.history.pushState({}, '', `/${userData.username}`);
   }, [userData.username]);
 
-  // --- Safety Timeout for Loading ---
+  // --- AUTH & DATA LISTENER (SEPARATED FOR STABILITY) ---
   useEffect(() => {
-      const timer = setTimeout(() => {
-          if (view === 'loading' && !user) {
-              setView('auth');
-          }
-      }, 3000); 
-      return () => clearTimeout(timer);
-  }, [view, user]);
-
-  // --- Auth Listener ---
-  useEffect(() => {
-    let unsubProfile;
-    let unsubTrans;
-
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
-        if (view === 'auth') setView('loading'); 
-        
-        // Listen to Profile
-        unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'main'), (snap) => {
-          if (snap.exists()) {
-            setUserData(snap.data());
-            if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
-            setView('dashboard');
-            checkAndProcessSubscriptions(u.uid);
-          } else {
-            setView('setup');
-          }
-        });
-
-        // Listen to Transactions
-        unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'users', u.uid, 'transactions'), (snap) => {
-          const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-          txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-          setTransactions(txs);
-        });
+        // Do NOT set view here. Let data listener handle it.
       } else {
         setUser(null);
         setView('auth');
         setUserData({});
         setTransactions([]);
-        if(unsubProfile) unsubProfile();
-        if(unsubTrans) unsubTrans();
       }
     });
+    return () => unsubscribe();
+  }, []);
+
+  // --- DATA LISTENER (DEPENDS ON USER) ---
+  useEffect(() => {
+    if (!user) return;
+    
+    setView('loading');
+    
+    // 1. Listen to Profile
+    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), (snap) => {
+        if (snap.exists()) {
+            setUserData(snap.data());
+            if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
+            setView('dashboard');
+        } else {
+            setView('setup');
+        }
+    });
+
+    // 2. Listen to Transactions
+    const unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), (snap) => {
+        const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+        txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setTransactions(txs);
+    });
+
+    // 3. Check Subscriptions (One-time check on load)
+    checkAndProcessSubscriptions(user.uid);
 
     return () => {
-        unsubscribe();
-        if(unsubProfile) unsubProfile();
-        if(unsubTrans) unsubTrans();
+        unsubProfile();
+        unsubTrans();
     };
-  }, []);
+  }, [user]);
 
   const checkAndProcessSubscriptions = async (uid) => {
       const subsRef = collection(db, 'artifacts', appId, 'users', uid, 'subscriptions');
@@ -583,25 +524,16 @@ export default function RichrApp() {
       } catch (e) { console.error(e); }
   };
 
-  // --- Handlers ---
+  const handleLogout = async () => {
+      await signOut(auth);
+      // State cleanup handled by auth listener
+      setIsProfileOpen(false);
+  };
+
   const handleAuthSubmit = async (e) => { e.preventDefault(); setErrorMsg(''); setIsSubmitting(true); try { if (authMode === 'login') await signInWithEmailAndPassword(auth, email, password); else await createUserWithEmailAndPassword(auth, email, password); } catch (err) { setErrorMsg(err.message); setIsSubmitting(false); } };
   const handleGoogleAuth = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInWithPopup(auth, googleProvider); } catch (err) { setErrorMsg("Google Sign-In Error."); console.error(err); setIsSubmitting(false); } };
   const handleGuestLogin = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInAnonymously(auth); } catch (err) { console.error(err); setErrorMsg("Guest Auth failed."); setIsSubmitting(false); } };
   
-  const handleLogout = async () => {
-    try {
-        // Stop listening to data before signing out
-        setUser(null);
-        setView('auth');
-        setUserData({});
-        setTransactions([]);
-        setIsProfileOpen(false);
-        await signOut(auth);
-    } catch (error) {
-        console.error("Logout error", error);
-    }
-  };
-
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;

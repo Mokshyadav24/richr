@@ -53,7 +53,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const appId = 'richr-prod-v1'; // Stable Production ID
+// CRITICAL: Stable App ID for persistence
+const APP_ID = 'richr-production-live'; 
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -64,20 +65,19 @@ const FINANCIAL_QUOTES = [
   "Do not save what is left after spending, but spend what is left after saving. - Warren Buffett",
   "Beware of little expenses. A small leak will sink a great ship. - Benjamin Franklin",
   "The stock market is designed to transfer money from the Active to the Patient. - Warren Buffett",
-  "It's not how much money you make, but how much money you keep. - Robert Kiyosaki",
-  "The goal isn’t more money. The goal is living life on your terms. - Chris Brogan"
+  "It's not how much money you make, but how much money you keep. - Robert Kiyosaki"
 ];
 
 const getDailyQuote = () => FINANCIAL_QUOTES[new Date().getDate() % FINANCIAL_QUOTES.length];
 
-const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income', 'Loan Repayment', 'Investment'];
+const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income'];
 
 const guessBudgetCategory = (tag) => {
     const lower = tag.toLowerCase();
     if (lower === 'income') return 'Income';
-    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel', 'loan repayment', 'emi'].includes(lower)) return 'Need';
+    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel'].includes(lower)) return 'Need';
     if (['food', 'entertainment', 'shopping', 'travel', 'hobbies'].includes(lower)) return 'Want';
-    if (['investment', 'stocks', 'sip', 'gold', 'mutual fund'].includes(lower)) return 'Investment';
+    if (['investment', 'stocks', 'sip', 'gold'].includes(lower)) return 'Investment';
     return 'Want'; 
 };
 
@@ -101,17 +101,10 @@ const callGeminiFlash = async (apiKey, prompt) => {
 const getFinancialContext = (transactions, userData) => {
     const totalIncome = userData.income || 0;
     const totalExpenses = transactions.filter(t => t.category === 'Expense').reduce((sum, t) => sum + t.amount, 0);
-    
-    // Group expenses by tag
     const catBreakdown = transactions.reduce((acc, t) => {
         if(t.category === 'Expense') acc[t.tag] = (acc[t.tag] || 0) + t.amount;
         return acc;
     }, {});
-    
-    // Calculate Net Worth
-    const assets = userData.assets || 0;
-    const debt = userData.debt || 0;
-    const netWorth = assets - debt;
     
     const recentTx = transactions.slice(0, 5).map(t => `${t.dateStr}: ${t.title} (${t.amount})`).join(", ");
 
@@ -119,16 +112,13 @@ const getFinancialContext = (transactions, userData) => {
       Profile: ${userData.name}, Age: ${userData.age}, Goal: ${userData.goal}
       Monthly Income: ₹${totalIncome}
       Total Expenses (All Time): ₹${totalExpenses}
-      Total Debt: ₹${debt}
-      Total Assets: ₹${assets}
-      Net Worth: ₹${netWorth}
+      Savings Rate: ${totalIncome > 0 ? Math.round(((totalIncome - totalExpenses)/totalIncome)*100) : 0}%
       Category Breakdown: ${JSON.stringify(catBreakdown)}
       Recent Activity: ${recentTx}
     `;
 };
 
-// --- Components (Defined BEFORE Usage) ---
-
+// --- Components ---
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -142,7 +132,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   const variants = {
     primary: "bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/20",
     secondary: isDark ? "bg-slate-700 hover:bg-slate-600 text-slate-200" : "bg-gray-100 hover:bg-gray-200 text-gray-700",
-    white: "bg-white hover:bg-slate-100 text-slate-900 shadow-lg border border-gray-200",
+    white: "bg-white hover:bg-slate-100 text-slate-900 shadow-lg",
     danger: "bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/50",
     ghost: isDark ? "bg-transparent hover:bg-slate-700/50 text-slate-400 hover:text-white" : "bg-transparent hover:bg-gray-100 text-gray-500 hover:text-gray-900",
     chat: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/30 rounded-full p-3 fixed bottom-6 right-6 z-50"
@@ -155,8 +145,10 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
+// --- SUB-COMPONENTS ---
+
 const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return <button onClick={onShow} className={`p-2 rounded-full transition-colors ${isDark ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}><Lightbulb size={20} /></button>;
+  if (!isVisible) return null; // Button is in Navbar now
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
         <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
@@ -169,7 +161,6 @@ const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
   );
 };
 
-// --- CALCULATORS ---
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
     const [values, setValues] = useState({ p: 5000, r: 12, n: 5 }); 
@@ -214,8 +205,9 @@ const Calculators = ({ isDark }) => {
             </div>
             {result && (
                 <div className={`p-4 rounded-xl border animate-fade-in-up ${isDark ? 'bg-emerald-900/20 border-emerald-500/30' : 'bg-emerald-50 border-emerald-200'}`}>
-                     <div className="flex justify-between mb-2"><span className="text-slate-500">{mode === 'loan' ? 'Monthly EMI' : 'Total Value'}</span><span className="font-bold text-xl">₹{mode === 'loan' ? result.emi.toLocaleString() : result.total.toLocaleString()}</span></div>
-                     <p className="text-xs text-slate-500 text-center mt-2">{mode === 'loan' ? `Total Interest: ₹${result.interest.toLocaleString()}` : `Est. Returns: ₹${(result.gain || 0).toLocaleString()}`}</p>
+                    {mode === 'sip' && (<><div className="flex justify-between mb-2"><span className="text-slate-500">Invested</span><span className="font-bold">₹{result.invested.toLocaleString()}</span></div><div className="flex justify-between mb-2"><span className="text-slate-500">Est. Returns</span><span className="font-bold text-emerald-500">+₹{result.gain.toLocaleString()}</span></div><div className="flex justify-between pt-2 border-t border-slate-700/30"><span className="text-slate-400 font-medium">Total Value</span><span className="font-bold text-xl">₹{result.total.toLocaleString()}</span></div></>)}
+                    {mode === 'loan' && (<><div className="flex justify-between mb-2"><span className="text-slate-500">Monthly EMI</span><span className="font-bold text-red-400">₹{result.emi.toLocaleString()}</span></div><div className="flex justify-between mb-2"><span className="text-slate-500">Total Interest</span><span className="font-bold text-red-400">₹{result.interest.toLocaleString()}</span></div><div className="flex justify-between pt-2 border-t border-slate-700/30"><span className="text-slate-400 font-medium">Total Payable</span><span className="font-bold text-xl">₹{result.total.toLocaleString()}</span></div></>)}
+                    {mode === 'swp' && (<div className="text-center"><p className="text-xs text-slate-500">{result.note}</p><h3 className="text-2xl font-bold text-emerald-500 mt-1">₹{result.total.toLocaleString()}</h3></div>)}
                 </div>
             )}
         </div>
@@ -228,42 +220,71 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     
     useEffect(() => {
         if(!userId) return;
-        const unsub = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), (snap) => {
-            setSubs(snap.docs.map(d => ({id: d.id, ...d.data()})));
+        const unsub = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions'), (snap) => {
+            const list = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            setSubs(list);
         });
         return () => unsub();
     }, [userId]);
 
     const addSub = async () => {
         if(!newSub.title || !newSub.amount) return;
-        await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), {
-            title: newSub.title, amount: parseFloat(newSub.amount), day: parseInt(newSub.day), createdAt: serverTimestamp(), tag: 'Bills' 
+        await addDoc(collection(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions'), {
+            title: newSub.title,
+            amount: parseFloat(newSub.amount),
+            day: parseInt(newSub.day),
+            createdAt: serverTimestamp(),
+            tag: 'Bills' 
         });
         setNewSub({ title: '', amount: '', day: 1 });
     };
 
-    const deleteSub = async (id) => await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'subscriptions', id));
+    const deleteSub = async (id) => {
+        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions', id));
+    };
+
     const totalSubs = subs.reduce((a, b) => a + (b.amount || 0), 0);
 
     return (
         <div className="space-y-6">
             <div className={`p-4 rounded-xl border flex justify-between items-center ${isDark ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-indigo-50 border-indigo-200'}`}>
-                <div><h4 className={`text-sm font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Total Monthly Subscriptions</h4><p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{totalSubs.toLocaleString()}</p></div>
+                <div>
+                    <h4 className={`text-sm font-medium ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Total Monthly Subscriptions</h4>
+                    <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>₹{totalSubs.toLocaleString()}</p>
+                </div>
                 <div className="p-2 bg-indigo-500 rounded-lg text-white"><Repeat size={24} /></div>
             </div>
+
             <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
                 {subs.map(s => (
                     <div key={s.id} className={`flex justify-between items-center p-3 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'}`}>
-                        <div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'}`}>{s.day}</div><div><p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{s.title}</p><p className="text-[10px] text-slate-500">Auto-renews monthly</p></div></div>
-                        <div className="flex items-center gap-3"><span className="font-bold text-sm">₹{s.amount}</span><button onClick={() => deleteSub(s.id)} className="text-slate-500 hover:text-red-500"><Trash2 size={14}/></button></div>
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-slate-700 text-slate-300' : 'bg-gray-100 text-gray-600'}`}>{s.day}</div>
+                            <div>
+                                <p className={`text-sm font-medium ${isDark ? 'text-white' : 'text-slate-900'}`}>{s.title}</p>
+                                <p className="text-[10px] text-slate-500">Auto-renews monthly</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="font-bold text-sm">₹{s.amount}</span>
+                            <button onClick={() => deleteSub(s.id)} className="text-slate-500 hover:text-red-500"><Trash2 size={14}/></button>
+                        </div>
                     </div>
                 ))}
                 {subs.length === 0 && <p className="text-center text-xs text-slate-500 py-4">No active subscriptions.</p>}
             </div>
+
             <div className={`p-4 rounded-xl border space-y-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gray-50 border-gray-200'}`}>
                 <h4 className={`text-xs font-bold uppercase tracking-wider ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Add New</h4>
-                <div className="grid grid-cols-2 gap-3"><input type="text" placeholder="App Name" value={newSub.title} onChange={e => setNewSub({...newSub, title: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /><input type="number" placeholder="Amt" value={newSub.amount} onChange={e => setNewSub({...newSub, amount: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /></div>
-                <div className="flex items-center gap-3"><input type="number" min="1" max="31" value={newSub.day} onChange={e => setNewSub({...newSub, day: e.target.value})} className={`w-16 p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} /><Button onClick={addSub} size="sm" className="flex-1">Add Subscription</Button></div>
+                <div className="grid grid-cols-2 gap-3">
+                    <input type="text" placeholder="App Name (e.g. Netflix)" value={newSub.title} onChange={e => setNewSub({...newSub, title: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
+                    <input type="number" placeholder="Amount (₹)" value={newSub.amount} onChange={e => setNewSub({...newSub, amount: e.target.value})} className={`p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
+                </div>
+                <div className="flex items-center gap-3">
+                    <label className="text-xs text-slate-500">Day of Month:</label>
+                    <input type="number" min="1" max="31" value={newSub.day} onChange={e => setNewSub({...newSub, day: e.target.value})} className={`w-16 p-2 rounded-lg text-sm outline-none ${isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-gray-300 text-slate-900'}`} />
+                    <Button onClick={addSub} size="sm" className="flex-1">Add Subscription</Button>
+                </div>
             </div>
         </div>
     );
@@ -272,7 +293,11 @@ const SubscriptionsManager = ({ userId, isDark }) => {
 const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, geminiKey, setGeminiKey, setIsDarkMode, userId, onUpdateProfile, initialTab }) => {
     const [activeTab, setActiveTab] = useState(initialTab || 'calculators');
     const [editData, setEditData] = useState(userData);
-    const handleProfileUpdate = () => { onUpdateProfile(editData); alert("Profile Updated!"); };
+
+    const handleProfileUpdate = () => {
+        onUpdateProfile(editData);
+        alert("Profile Updated!");
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -287,35 +312,49 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                             )}
                         </div>
                         <div>
-                            <div className="flex items-center gap-2"><h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>{userData.username && <span className="text-xs text-slate-500">@{userData.username}</span>}</div>
+                            <div className="flex items-center gap-2">
+                                <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{userData.name}</h2>
+                                {userData.username && <span className="text-xs text-slate-500">@{userData.username}</span>}
+                            </div>
                             <p className="text-sm text-slate-500">{userData.email || "Richr User"}</p>
+                            <div className="flex gap-2 mt-2">
+                                <span className="text-[10px] px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20">{userData.goal || "Saver"}</span>
+                            </div>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-500"><X size={20}/></button>
                 </div>
+
                 <div className="flex flex-1 overflow-hidden">
                     <div className={`w-48 p-4 border-r space-y-2 ${isDark ? 'bg-slate-950/50 border-slate-800' : 'bg-gray-50 border-gray-100'}`}>
                         <button onClick={() => setActiveTab('calculators')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'calculators' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Calculator size={16}/> Tools</button>
-                        <button onClick={() => setActiveTab('subscriptions')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'subscriptions' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Repeat size={16}/> Subs</button>
-                        <button onClick={() => setActiveTab('profile')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><UserCircle size={16}/> Profile</button>
+                        <button onClick={() => setActiveTab('subscriptions')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'subscriptions' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Repeat size={16}/> Subscriptions</button>
+                        <button onClick={() => setActiveTab('profile')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'profile' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><UserCircle size={16}/> Edit Profile</button>
                         <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'settings' ? 'bg-emerald-500/10 text-emerald-500' : 'text-slate-500 hover:text-slate-300'}`}><Settings size={16}/> Settings</button>
-                        <div className="pt-4 mt-4 border-t border-slate-800/50"><button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 flex items-center gap-2"><LogOut size={16}/> Logout</button></div>
+                        <div className="pt-4 mt-4 border-t border-slate-800/50">
+                            <button onClick={onLogout} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 flex items-center gap-2"><LogOut size={16}/> Logout</button>
+                        </div>
                     </div>
+
                     <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
-                        {activeTab === 'calculators' && (<div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Financial Calculators</h3><Calculators isDark={isDark} /></div>)}
-                        {activeTab === 'subscriptions' && (<div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Subscription Manager</h3><SubscriptionsManager userId={userId} isDark={isDark} /></div>)}
+                        {activeTab === 'calculators' && (
+                            <div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Financial Calculators</h3><Calculators isDark={isDark} /></div>
+                        )}
+                        {activeTab === 'subscriptions' && (
+                             <div><h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Subscription Manager</h3><SubscriptionsManager userId={userId} isDark={isDark} /></div>
+                        )}
                         {activeTab === 'profile' && (
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
-                                <div><label className="text-xs text-slate-500">Username (Unique URL)</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                <div><label className="text-xs text-slate-500">Username</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div><label className="text-xs text-slate-500">Profile Pic URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-500">Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                     <div><label className="text-xs text-slate-500">Fixed Expenses</label><input type="number" value={editData.expenses} onChange={e => setEditData({...editData, expenses: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-500">Debt</label><input type="number" value={editData.debt} onChange={e => setEditData({...editData, debt: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
-                                    <div><label className="text-xs text-slate-500">Assets</label><input type="number" value={editData.assets} onChange={e => setEditData({...editData, assets: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Total Debt</label><input type="number" value={editData.debt} onChange={e => setEditData({...editData, debt: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                    <div><label className="text-xs text-slate-500">Total Assets</label><input type="number" value={editData.assets} onChange={e => setEditData({...editData, assets: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 </div>
                                 <div><label className="text-xs text-slate-500">Goal</label><input type="text" value={editData.goal} onChange={e => setEditData({...editData, goal: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <Button onClick={handleProfileUpdate} className="w-full">Update Profile</Button>
@@ -328,7 +367,11 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                                     <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Appearance</span>
                                     <button onClick={() => setIsDarkMode(!isDark)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
                                 </div>
-                                <div><label className="text-xs text-slate-500 block mb-2">Gemini API Key</label><input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className={`w-full p-3 rounded-xl outline-none ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-gray-50 border-gray-200'}`} placeholder="AIza..." /><Button onClick={onSaveSettings} className="mt-4 w-full">Save Key</Button></div>
+                                <div>
+                                    <label className="text-xs text-slate-500 block mb-2">Gemini API Key</label>
+                                    <input type="password" value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} className={`w-full p-3 rounded-xl outline-none ${isDark ? 'bg-slate-800 text-white border-slate-700' : 'bg-gray-50 border-gray-200'}`} placeholder="AIza..." />
+                                    <Button onClick={onSaveSettings} className="mt-4 w-full">Save Key</Button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -421,10 +464,18 @@ export default function RichrApp() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState('loading'); 
   const [authMode, setAuthMode] = useState('login');
+  
+  // Theme State
   const [isDarkMode, setIsDarkMode] = useState(true);
   
-  // Data State
-  const [userData, setUserData] = useState({});
+  // Auth Form
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Data
+  const [userData, setUserData] = useState({ name: '', age: '', income: 0, expenses: 0, goal: '', currentSavings: 0, debt: 0, assets: 0, username: '', profilePic: '' });
   const [transactions, setTransactions] = useState([]);
   
   // UI State
@@ -433,18 +484,16 @@ export default function RichrApp() {
   const [profileInitialTab, setProfileInitialTab] = useState('profile');
   const [geminiKey, setGeminiKey] = useState('AIzaSyC0xqx7bHkhUM6ZHZYXErtRPWJd_sCnIlY');
   
-  // Dashboard State
+  // Dashboard Utils
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [selectedDate, setSelectedDate] = useState(null); 
   const [dashboardViewMode, setDashboardViewMode] = useState('heatmap');
+  
+  // Quote State
   const [showQuote, setShowQuote] = useState(true);
   const dailyQuote = useMemo(() => getDailyQuote(), []);
   
-  // Forms
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Forms & Modals
   const [manualFormData, setManualFormData] = useState({ name: '', age: '', income: '', expenses: '', goal: '', currentSavings: '', debt: '', assets: '' });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [newTransType, setNewTransType] = useState('expense');
@@ -452,17 +501,21 @@ export default function RichrApp() {
   const [isRecurring, setIsRecurring] = useState(false);
   const [newTransClass, setNewTransClass] = useState('Want'); 
 
-  // --- URL Update ---
+  // --- URL HISTORY UPDATE ---
   useEffect(() => {
-    if (userData.username) window.history.pushState({}, '', `/${userData.username}`);
+    if (userData.username) {
+        window.history.pushState({}, '', `/${userData.username}`);
+    }
   }, [userData.username]);
 
-  // --- AUTH & DATA LISTENER (SEPARATED FOR STABILITY) ---
+  // --- AUTH & DATA LISTENER ---
+  // Separate effects to avoid race conditions and ensure clean loading states
+  
+  // 1. Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
-        // Do NOT set view here. Let data listener handle it.
       } else {
         setUser(null);
         setView('auth');
@@ -473,31 +526,32 @@ export default function RichrApp() {
     return () => unsubscribe();
   }, []);
 
-  // --- DATA LISTENER (DEPENDS ON USER) ---
+  // 2. Data Listener (Only runs when user is set)
   useEffect(() => {
     if (!user) return;
     
+    // Explicitly set loading when user is found, before data comes in
     setView('loading');
     
-    // 1. Listen to Profile
-    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), (snap) => {
+    // Listen to Profile
+    const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), (snap) => {
         if (snap.exists()) {
             setUserData(snap.data());
             if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
-            setView('dashboard');
+            setView('dashboard'); // Data found -> Dashboard
         } else {
-            setView('setup');
+            setView('setup'); // No data -> Setup
         }
     });
 
-    // 2. Listen to Transactions
-    const unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), (snap) => {
+    // Listen to Transactions
+    const unsubTrans = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), (snap) => {
         const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
         txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
         setTransactions(txs);
     });
 
-    // 3. Check Subscriptions (One-time check on load)
+    // Check Subs
     checkAndProcessSubscriptions(user.uid);
 
     return () => {
@@ -507,7 +561,7 @@ export default function RichrApp() {
   }, [user]);
 
   const checkAndProcessSubscriptions = async (uid) => {
-      const subsRef = collection(db, 'artifacts', appId, 'users', uid, 'subscriptions');
+      const subsRef = collection(db, 'artifacts', APP_ID, 'users', uid, 'subscriptions');
       try {
           const snap = await getDocs(subsRef);
           const today = new Date();
@@ -517,19 +571,21 @@ export default function RichrApp() {
               const sub = docSnap.data();
               if (sub.lastProcessedMonth !== currentMonthStr && currentDay >= sub.day) {
                   const subDate = new Date(today.getFullYear(), today.getMonth(), sub.day);
-                  await addDoc(collection(db, 'artifacts', appId, 'users', uid, 'transactions'), { title: sub.title, amount: parseFloat(sub.amount), category: 'Expense', tag: sub.tag, typeClass: sub.typeClass || 'Need', dateStr: formatDate(subDate), monthStr: currentMonthStr, yearStr: getYearStr(today), isAuto: true, createdAt: serverTimestamp() });
-                  await updateDoc(doc(db, 'artifacts', appId, 'users', uid, 'subscriptions', docSnap.id), { lastProcessedMonth: currentMonthStr });
+                  await addDoc(collection(db, 'artifacts', APP_ID, 'users', uid, 'transactions'), { title: sub.title, amount: parseFloat(sub.amount), category: 'Expense', tag: sub.tag, typeClass: sub.typeClass || 'Need', dateStr: formatDate(subDate), monthStr: currentMonthStr, yearStr: getYearStr(today), isAuto: true, createdAt: serverTimestamp() });
+                  await updateDoc(doc(db, 'artifacts', APP_ID, 'users', uid, 'subscriptions', docSnap.id), { lastProcessedMonth: currentMonthStr });
               }
           });
       } catch (e) { console.error(e); }
   };
 
   const handleLogout = async () => {
+      // Manual cleanup before signout to update UI instantly
+      setUser(null);
+      setView('auth');
       await signOut(auth);
-      // State cleanup handled by auth listener
-      setIsProfileOpen(false);
   };
 
+  // ... [Other Handlers remain same] ...
   const handleAuthSubmit = async (e) => { e.preventDefault(); setErrorMsg(''); setIsSubmitting(true); try { if (authMode === 'login') await signInWithEmailAndPassword(auth, email, password); else await createUserWithEmailAndPassword(auth, email, password); } catch (err) { setErrorMsg(err.message); setIsSubmitting(false); } };
   const handleGoogleAuth = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInWithPopup(auth, googleProvider); } catch (err) { setErrorMsg("Google Sign-In Error."); console.error(err); setIsSubmitting(false); } };
   const handleGuestLogin = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInAnonymously(auth); } catch (err) { console.error(err); setErrorMsg("Guest Auth failed."); setIsSubmitting(false); } };
@@ -537,7 +593,7 @@ export default function RichrApp() {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;
-    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), {
+    await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), {
         name: manualFormData.name, 
         age: manualFormData.age, 
         income: parseFloat(manualFormData.income), 
@@ -551,10 +607,10 @@ export default function RichrApp() {
     });
   };
   
-  const handleUpdateProfile = async (newData) => { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), newData, { merge: true }); };
-  const saveSettings = async () => { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), { geminiKey: geminiKey }); };
-  const addTransaction = async (title, amount, type, category, dateValue, recurring, typeClass) => { const d = new Date(dateValue); await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), { title, amount: parseFloat(amount), category: type === 'expense' ? 'Expense' : 'Income', tag: category || 'General', typeClass, createdAt: serverTimestamp(), dateStr: dateValue, monthStr: getMonthStr(d), yearStr: getYearStr(d) }); if (recurring && type === 'expense') { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'subscriptions'), { title, amount: parseFloat(amount), tag: category || 'General', typeClass, day: d.getDate(), lastProcessedMonth: getMonthStr(d), createdAt: serverTimestamp() }); alert(`Subscription set!`); } setIsAddModalOpen(false); setTxDate(formatDate(new Date())); setIsRecurring(false); };
-  const deleteTransaction = async (id) => { if(!window.confirm("Delete?")) return; await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id)); };
+  const handleUpdateProfile = async (newData) => { await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), newData, { merge: true }); };
+  const saveSettings = async () => { await updateDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), { geminiKey: geminiKey }); };
+  const addTransaction = async (title, amount, type, category, dateValue, recurring, typeClass) => { const d = new Date(dateValue); await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), { title, amount: parseFloat(amount), category: type === 'expense' ? 'Expense' : 'Income', tag: category || 'General', typeClass, createdAt: serverTimestamp(), dateStr: dateValue, monthStr: getMonthStr(d), yearStr: getYearStr(d) }); if (recurring && type === 'expense') { await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'subscriptions'), { title, amount: parseFloat(amount), tag: category || 'General', typeClass, day: d.getDate(), lastProcessedMonth: getMonthStr(d), createdAt: serverTimestamp() }); alert(`Subscription set!`); } setIsAddModalOpen(false); setTxDate(formatDate(new Date())); setIsRecurring(false); };
+  const deleteTransaction = async (id) => { if(!window.confirm("Delete?")) return; await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions', id)); };
   const exportData = () => { const headers = ["Date", "Type", "Title", "Amount", "Tag", "Class"]; const rows = transactions.map(t => [t.dateStr, t.category, t.title, t.amount, t.tag, t.typeClass]); const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n"); const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `richr.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
 
   const stats = useMemo(() => {
@@ -645,21 +701,16 @@ export default function RichrApp() {
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-slate-800'}`}>
       <nav className={`p-4 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
-        <div className="flex-1 flex justify-start">
-            {!showQuote && (
-                <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
-                    <Lightbulb size={20} />
-                </button>
-            )}
+        <div className="flex-1 flex justify-start items-center gap-2">
+            <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
+                <Lightbulb size={20} />
+            </button>
         </div>
         <div className="flex-none flex items-center gap-2">
             <Activity className="text-emerald-500" />
             <span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span>
         </div>
         <div className="flex-1 flex justify-end items-center gap-4">
-            <button onClick={() => { setProfileInitialTab('settings'); setIsProfileOpen(true); }} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}>
-                <Settings size={20} />
-            </button>
             <button onClick={() => { setProfileInitialTab('profile'); setIsProfileOpen(true); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
                 {userData.profilePic ? <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
             </button>

@@ -53,8 +53,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-// STABLE APP ID FOR PERSISTENCE
-const APP_ID = 'richr-live-v1'; 
+const appId = 'richr-v45-logout-fix';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -145,10 +144,8 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
-// --- SUB-COMPONENTS ---
-
 const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return null;
+  if (!isVisible) return <button onClick={onShow} className={`fixed top-4 left-4 z-50 p-2 rounded-full shadow-lg ${isDark ? 'bg-slate-800/80 text-indigo-400 border border-indigo-500/30' : 'bg-white text-indigo-600 border border-indigo-100'}`}><Lightbulb size={20} /></button>;
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
         <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
@@ -160,6 +157,8 @@ const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
     </div>
   );
 };
+
+// --- SUB-COMPONENTS ---
 
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
@@ -220,7 +219,7 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     
     useEffect(() => {
         if(!userId) return;
-        const unsub = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions'), (snap) => {
+        const unsub = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), (snap) => {
             const list = snap.docs.map(d => ({id: d.id, ...d.data()}));
             setSubs(list);
         });
@@ -229,7 +228,7 @@ const SubscriptionsManager = ({ userId, isDark }) => {
 
     const addSub = async () => {
         if(!newSub.title || !newSub.amount) return;
-        await addDoc(collection(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions'), {
+        await addDoc(collection(db, 'artifacts', appId, 'users', userId, 'subscriptions'), {
             title: newSub.title,
             amount: parseFloat(newSub.amount),
             day: parseInt(newSub.day),
@@ -240,7 +239,7 @@ const SubscriptionsManager = ({ userId, isDark }) => {
     };
 
     const deleteSub = async (id) => {
-        await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', userId, 'subscriptions', id));
+        await deleteDoc(doc(db, 'artifacts', appId, 'users', userId, 'subscriptions', id));
     };
 
     const totalSubs = subs.reduce((a, b) => a + (b.amount || 0), 0);
@@ -347,7 +346,6 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
                                 <div><label className="text-xs text-slate-500">Username</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
-                                <div><label className="text-xs text-slate-500">Email (Read Only)</label><input type="text" value={editData.email || ''} readOnly className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-gray-100 border-gray-300 text-gray-500'}`} /></div>
                                 <div><label className="text-xs text-slate-500">Profile Pic URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
@@ -366,7 +364,7 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>App Settings</h3>
                                 <div className="flex items-center justify-between p-4 rounded-xl border border-slate-700/50">
                                     <span className={isDark ? 'text-slate-300' : 'text-slate-700'}>Appearance</span>
-                                    <button onClick={() => setIsDarkMode(!isDark)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
+                                    <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-lg transition-colors ${isDark ? 'bg-slate-700 text-yellow-400' : 'bg-gray-200 text-slate-600'}`}>{isDark ? <Sun size={20} /> : <Moon size={20} />}</button>
                                 </div>
                                 <div>
                                     <label className="text-xs text-slate-500 block mb-2">Gemini API Key</label>
@@ -511,15 +509,18 @@ export default function RichrApp() {
 
   // --- Auth Listener ---
   useEffect(() => {
+    let unsubProfile;
+    let unsubTrans;
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
         if (view === 'auth') setView('loading'); 
         
-        const profileRef = doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main');
-        onSnapshot(profileRef, (snap) => {
+        // Listen to Profile
+        unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'users', u.uid, 'profile', 'main'), (snap) => {
           if (snap.exists()) {
-            setUserData({ ...snap.data(), email: u.email }); // MERGE EMAIL
+            setUserData(snap.data());
             if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
             setView('dashboard');
             checkAndProcessSubscriptions(u.uid);
@@ -527,7 +528,9 @@ export default function RichrApp() {
             setView('setup');
           }
         });
-        onSnapshot(collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), (snap) => {
+
+        // Listen to Transactions
+        unsubTrans = onSnapshot(collection(db, 'artifacts', appId, 'users', u.uid, 'transactions'), (snap) => {
           const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
           txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
           setTransactions(txs);
@@ -535,13 +538,22 @@ export default function RichrApp() {
       } else {
         setUser(null);
         setView('auth');
+        setUserData({});
+        setTransactions([]);
+        if(unsubProfile) unsubProfile();
+        if(unsubTrans) unsubTrans();
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribe();
+        if(unsubProfile) unsubProfile();
+        if(unsubTrans) unsubTrans();
+    };
   }, []);
 
   const checkAndProcessSubscriptions = async (uid) => {
-      const subsRef = collection(db, 'artifacts', APP_ID, 'users', uid, 'subscriptions');
+      const subsRef = collection(db, 'artifacts', appId, 'users', uid, 'subscriptions');
       try {
           const snap = await getDocs(subsRef);
           const today = new Date();
@@ -551,8 +563,8 @@ export default function RichrApp() {
               const sub = docSnap.data();
               if (sub.lastProcessedMonth !== currentMonthStr && currentDay >= sub.day) {
                   const subDate = new Date(today.getFullYear(), today.getMonth(), sub.day);
-                  await addDoc(collection(db, 'artifacts', APP_ID, 'users', uid, 'transactions'), { title: sub.title, amount: parseFloat(sub.amount), category: 'Expense', tag: sub.tag, typeClass: sub.typeClass || 'Need', dateStr: formatDate(subDate), monthStr: currentMonthStr, yearStr: getYearStr(today), isAuto: true, createdAt: serverTimestamp() });
-                  await updateDoc(doc(db, 'artifacts', APP_ID, 'users', uid, 'subscriptions', docSnap.id), { lastProcessedMonth: currentMonthStr });
+                  await addDoc(collection(db, 'artifacts', appId, 'users', uid, 'transactions'), { title: sub.title, amount: parseFloat(sub.amount), category: 'Expense', tag: sub.tag, typeClass: sub.typeClass || 'Need', dateStr: formatDate(subDate), monthStr: currentMonthStr, yearStr: getYearStr(today), isAuto: true, createdAt: serverTimestamp() });
+                  await updateDoc(doc(db, 'artifacts', appId, 'users', uid, 'subscriptions', docSnap.id), { lastProcessedMonth: currentMonthStr });
               }
           });
       } catch (e) { console.error(e); }
@@ -579,7 +591,7 @@ export default function RichrApp() {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;
-    await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), {
+    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), {
         name: manualFormData.name, 
         age: manualFormData.age, 
         income: parseFloat(manualFormData.income), 
@@ -593,10 +605,10 @@ export default function RichrApp() {
     });
   };
   
-  const handleUpdateProfile = async (newData) => { await setDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), newData, { merge: true }); };
-  const saveSettings = async () => { await updateDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), { geminiKey: geminiKey }); };
-  const addTransaction = async (title, amount, type, category, dateValue, recurring, typeClass) => { const d = new Date(dateValue); await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), { title, amount: parseFloat(amount), category: type === 'expense' ? 'Expense' : 'Income', tag: category || 'General', typeClass, createdAt: serverTimestamp(), dateStr: dateValue, monthStr: getMonthStr(d), yearStr: getYearStr(d) }); if (recurring && type === 'expense') { await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'subscriptions'), { title, amount: parseFloat(amount), tag: category || 'General', typeClass, day: d.getDate(), lastProcessedMonth: getMonthStr(d), createdAt: serverTimestamp() }); alert(`Subscription set!`); } setIsAddModalOpen(false); setTxDate(formatDate(new Date())); setIsRecurring(false); };
-  const deleteTransaction = async (id) => { if(!window.confirm("Delete?")) return; await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions', id)); };
+  const handleUpdateProfile = async (newData) => { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), newData, { merge: true }); };
+  const saveSettings = async () => { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'main'), { geminiKey: geminiKey }); };
+  const addTransaction = async (title, amount, type, category, dateValue, recurring, typeClass) => { const d = new Date(dateValue); await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'transactions'), { title, amount: parseFloat(amount), category: type === 'expense' ? 'Expense' : 'Income', tag: category || 'General', typeClass, createdAt: serverTimestamp(), dateStr: dateValue, monthStr: getMonthStr(d), yearStr: getYearStr(d) }); if (recurring && type === 'expense') { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'subscriptions'), { title, amount: parseFloat(amount), tag: category || 'General', typeClass, day: d.getDate(), lastProcessedMonth: getMonthStr(d), createdAt: serverTimestamp() }); alert(`Subscription set!`); } setIsAddModalOpen(false); setTxDate(formatDate(new Date())); setIsRecurring(false); };
+  const deleteTransaction = async (id) => { if(!window.confirm("Delete?")) return; await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'transactions', id)); };
   const exportData = () => { const headers = ["Date", "Type", "Title", "Amount", "Tag", "Class"]; const rows = transactions.map(t => [t.dateStr, t.category, t.title, t.amount, t.tag, t.typeClass]); const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n"); const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `richr.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
 
   const stats = useMemo(() => {
@@ -638,7 +650,8 @@ export default function RichrApp() {
   if (view === 'auth') return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden ${isDarkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-emerald-500/10 rounded-full blur-[100px]"></div>
-       <QuoteBanner quote={getDailyQuote()} isVisible={true} onClose={() => {}} onShow={() => {}} isDark={isDarkMode} />
+       {/* QUOTE NOW INTERACTIVE */}
+       <QuoteBanner quote={getDailyQuote()} isVisible={showQuote} onClose={() => setShowQuote(false)} onShow={() => setShowQuote(true)} isDark={isDarkMode} />
       <Card className="w-full max-w-md z-10 animate-fade-in-up mt-4" isDark={isDarkMode}>
         <Activity className="w-12 h-12 text-emerald-500 mx-auto mb-6" />
         <h2 className={`text-2xl font-bold text-center mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{authMode === 'login' ? 'Welcome Back' : 'Join Richr'}</h2>
@@ -655,6 +668,13 @@ export default function RichrApp() {
         <div className="flex justify-center mt-4"><button type="button" onClick={() => { setAuthMode(authMode === 'login' ? 'signup' : 'login'); setErrorMsg(''); }} className="text-slate-400 text-sm hover:text-emerald-400">{authMode === 'login' ? "New here? Create Account" : "Have an account? Login"}</button></div>
         <Button variant="secondary" className="w-full mt-6" onClick={handleGuestLogin} isLoading={isSubmitting} isDark={isDarkMode}>{isSubmitting ? "Creating Guest Session..." : "Continue as Guest"}</Button>
       </Card>
+      
+      {/* Bulb Trigger for Auth Page */}
+      {!showQuote && (
+         <div className="fixed top-4 left-4 z-50">
+             <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors shadow-lg ${isDarkMode ? 'bg-slate-800 text-indigo-400' : 'bg-white text-indigo-600'}`}><Lightbulb size={20} /></button>
+         </div>
+      )}
     </div>
   );
 
@@ -687,7 +707,7 @@ export default function RichrApp() {
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-slate-800'}`}>
       <nav className={`p-4 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
-        <div className="flex-1 flex justify-start">
+        <div className="flex-1 flex justify-start items-center gap-2">
             {!showQuote && (
                 <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
                     <Lightbulb size={20} />
@@ -699,9 +719,6 @@ export default function RichrApp() {
             <span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span>
         </div>
         <div className="flex-1 flex justify-end items-center gap-4">
-            <button onClick={() => { setProfileInitialTab('settings'); setIsProfileOpen(true); }} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}>
-                <Settings size={20} />
-            </button>
             <button onClick={() => { setProfileInitialTab('profile'); setIsProfileOpen(true); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
                 {userData.profilePic ? <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
             </button>

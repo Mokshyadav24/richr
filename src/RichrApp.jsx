@@ -53,8 +53,8 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-// CRITICAL: Stable App ID for persistence
-const APP_ID = 'richr-production-live'; 
+// STABLE APP ID FOR PERSISTENCE
+const APP_ID = 'richr-live-v1'; 
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -148,7 +148,7 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
 // --- SUB-COMPONENTS ---
 
 const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
-  if (!isVisible) return null; // Button is in Navbar now
+  if (!isVisible) return null;
   return (
     <div className={`w-full max-w-3xl mx-auto mb-6 rounded-2xl p-4 flex items-start gap-4 animate-fade-in relative z-20 shadow-lg backdrop-blur-md border ${isDark ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900/80 border-indigo-500/30' : 'bg-gradient-to-r from-indigo-50 to-white/80 border-indigo-100'}`}>
         <div className={`p-2 rounded-lg mt-1 shrink-0 ${isDark ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-600'}`}><Lightbulb size={24} /></div>
@@ -347,6 +347,7 @@ const ProfileModal = ({ userData, isDark, onClose, onSaveSettings, onLogout, gem
                              <div className="space-y-4">
                                 <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Edit Financial Profile</h3>
                                 <div><label className="text-xs text-slate-500">Username</label><input type="text" value={editData.username || ''} onChange={e => setEditData({...editData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
+                                <div><label className="text-xs text-slate-500">Email (Read Only)</label><input type="text" value={editData.email || ''} readOnly className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-gray-100 border-gray-300 text-gray-500'}`} /></div>
                                 <div><label className="text-xs text-slate-500">Profile Pic URL</label><input type="text" value={editData.profilePic || ''} onChange={e => setEditData({...editData, profilePic: e.target.value})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div><label className="text-xs text-slate-500">Monthly Income</label><input type="number" value={editData.income} onChange={e => setEditData({...editData, income: parseFloat(e.target.value)})} className={`w-full p-2 rounded-lg border ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-gray-300'}`} /></div>
@@ -508,57 +509,36 @@ export default function RichrApp() {
     }
   }, [userData.username]);
 
-  // --- AUTH & DATA LISTENER ---
-  // Separate effects to avoid race conditions and ensure clean loading states
-  
-  // 1. Auth Listener
+  // --- Auth Listener ---
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
+        if (view === 'auth') setView('loading'); 
+        
+        const profileRef = doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main');
+        onSnapshot(profileRef, (snap) => {
+          if (snap.exists()) {
+            setUserData({ ...snap.data(), email: u.email }); // MERGE EMAIL
+            if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
+            setView('dashboard');
+            checkAndProcessSubscriptions(u.uid);
+          } else {
+            setView('setup');
+          }
+        });
+        onSnapshot(collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), (snap) => {
+          const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+          txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+          setTransactions(txs);
+        });
       } else {
         setUser(null);
         setView('auth');
-        setUserData({});
-        setTransactions([]);
       }
     });
     return () => unsubscribe();
   }, []);
-
-  // 2. Data Listener (Only runs when user is set)
-  useEffect(() => {
-    if (!user) return;
-    
-    // Explicitly set loading when user is found, before data comes in
-    setView('loading');
-    
-    // Listen to Profile
-    const unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'profile', 'main'), (snap) => {
-        if (snap.exists()) {
-            setUserData(snap.data());
-            if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
-            setView('dashboard'); // Data found -> Dashboard
-        } else {
-            setView('setup'); // No data -> Setup
-        }
-    });
-
-    // Listen to Transactions
-    const unsubTrans = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), (snap) => {
-        const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-        txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-        setTransactions(txs);
-    });
-
-    // Check Subs
-    checkAndProcessSubscriptions(user.uid);
-
-    return () => {
-        unsubProfile();
-        unsubTrans();
-    };
-  }, [user]);
 
   const checkAndProcessSubscriptions = async (uid) => {
       const subsRef = collection(db, 'artifacts', APP_ID, 'users', uid, 'subscriptions');
@@ -578,18 +558,24 @@ export default function RichrApp() {
       } catch (e) { console.error(e); }
   };
 
-  const handleLogout = async () => {
-      // Manual cleanup before signout to update UI instantly
-      setUser(null);
-      setView('auth');
-      await signOut(auth);
-  };
-
-  // ... [Other Handlers remain same] ...
+  // --- Handlers ---
   const handleAuthSubmit = async (e) => { e.preventDefault(); setErrorMsg(''); setIsSubmitting(true); try { if (authMode === 'login') await signInWithEmailAndPassword(auth, email, password); else await createUserWithEmailAndPassword(auth, email, password); } catch (err) { setErrorMsg(err.message); setIsSubmitting(false); } };
   const handleGoogleAuth = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInWithPopup(auth, googleProvider); } catch (err) { setErrorMsg("Google Sign-In Error."); console.error(err); setIsSubmitting(false); } };
   const handleGuestLogin = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInAnonymously(auth); } catch (err) { console.error(err); setErrorMsg("Guest Auth failed."); setIsSubmitting(false); } };
   
+  const handleLogout = async () => {
+    try {
+        setUser(null);
+        setView('auth');
+        setUserData({});
+        setTransactions([]);
+        setIsProfileOpen(false);
+        await signOut(auth);
+    } catch (error) {
+        console.error("Logout error", error);
+    }
+  };
+
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;
@@ -701,16 +687,21 @@ export default function RichrApp() {
   return (
     <div className={`min-h-screen ${isDarkMode ? 'bg-slate-950 text-slate-200' : 'bg-gray-50 text-slate-800'}`}>
       <nav className={`p-4 border-b flex justify-between items-center sticky top-0 backdrop-blur-md z-30 ${isDarkMode ? 'bg-slate-950/90 border-slate-800' : 'bg-white/90 border-gray-200'}`}>
-        <div className="flex-1 flex justify-start items-center gap-2">
-            <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
-                <Lightbulb size={20} />
-            </button>
+        <div className="flex-1 flex justify-start">
+            {!showQuote && (
+                <button onClick={() => setShowQuote(true)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-indigo-400 hover:bg-slate-800' : 'text-indigo-600 hover:bg-gray-100'}`}>
+                    <Lightbulb size={20} />
+                </button>
+            )}
         </div>
         <div className="flex-none flex items-center gap-2">
             <Activity className="text-emerald-500" />
             <span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span>
         </div>
         <div className="flex-1 flex justify-end items-center gap-4">
+            <button onClick={() => { setProfileInitialTab('settings'); setIsProfileOpen(true); }} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}>
+                <Settings size={20} />
+            </button>
             <button onClick={() => { setProfileInitialTab('profile'); setIsProfileOpen(true); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
                 {userData.profilePic ? <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
             </button>

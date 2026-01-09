@@ -520,7 +520,7 @@ export default function RichrApp() {
       return () => clearTimeout(timer);
   }, [view, user]);
 
-  // --- Auth Listener ---
+// --- Auth Listener ---
   useEffect(() => {
     let unsubProfile;
     let unsubTrans;
@@ -528,26 +528,41 @@ export default function RichrApp() {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
-        if (view === 'auth') setView('loading'); 
+        setView('loading'); 
         
-        // Listen to Profile
-        unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main'), (snap) => {
-          if (snap.exists()) {
-            setUserData(snap.data());
-            if(snap.data().geminiKey) setGeminiKey(snap.data().geminiKey);
-            setView('dashboard');
-            checkAndProcessSubscriptions(u.uid);
-          } else {
-            setView('setup');
+        // Listen to Profile with error handling
+        unsubProfile = onSnapshot(
+          doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main'), 
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              setUserData(data);
+              if(data.geminiKey) setGeminiKey(data.geminiKey);
+              setView('dashboard');
+              checkAndProcessSubscriptions(u.uid);
+            } else {
+              // Profile doesn't exist, need setup
+              setView('setup');
+            }
+          },
+          (error) => {
+            console.error("Profile fetch error:", error);
+            setView('setup'); // Fallback to setup on error
           }
-        });
+        );
 
-        // Listen to Transactions
-        unsubTrans = onSnapshot(collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), (snap) => {
-          const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-          txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-          setTransactions(txs);
-        });
+        // Listen to Transactions with error handling
+        unsubTrans = onSnapshot(
+          collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), 
+          (snap) => {
+            const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+            txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+            setTransactions(txs);
+          },
+          (error) => {
+            console.error("Transactions fetch error:", error);
+          }
+        );
       } else {
         setUser(null);
         setView('auth');

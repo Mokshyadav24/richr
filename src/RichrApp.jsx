@@ -5,7 +5,7 @@ import {
   Lock, Mail, ChevronRight, AlertCircle, FileText, Trash2, 
   Download, Filter, Target, Edit3, Lightbulb, Loader2, 
   Settings, BrainCircuit, Sparkles, MessageSquare, Bot, ArrowRight,
-  Calculator, Moon, Sun, LayoutGrid, PieChart as PieIcon, UserCircle, Repeat, CheckCircle, Globe, Camera, Upload, FileDown
+  Calculator, Moon, Sun, LayoutGrid, PieChart as PieIcon, UserCircle, Repeat, CheckCircle, Globe, Camera, Upload
 } from 'lucide-react';
 
 // --- Firebase Imports ---
@@ -53,7 +53,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const APP_ID = 'richr-v48-stable-init';
+const APP_ID = 'richr-live-v46-settings-fix';
 
 // --- Constants & Data ---
 const formatDate = (date) => date.toISOString().split('T')[0];
@@ -69,14 +69,14 @@ const FINANCIAL_QUOTES = [
 
 const getDailyQuote = () => FINANCIAL_QUOTES[new Date().getDate() % FINANCIAL_QUOTES.length];
 
-const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income'];
+const DEFAULT_CATEGORIES = ['General', 'Groceries', 'Food', 'Travel', 'Bills', 'Shopping', 'Entertainment', 'Income', 'Loan Repayment', 'Investment'];
 
 const guessBudgetCategory = (tag) => {
     const lower = tag.toLowerCase();
     if (lower === 'income') return 'Income';
-    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel', 'loan repayment', 'emi'].includes(lower)) return 'Need';
+    if (['groceries', 'bills', 'rent', 'education', 'health', 'fuel', 'loan repayment'].includes(lower)) return 'Need';
     if (['food', 'entertainment', 'shopping', 'travel', 'hobbies'].includes(lower)) return 'Want';
-    if (['investment', 'stocks', 'sip', 'gold'].includes(lower)) return 'Investment';
+    if (['investment', 'stocks', 'sip', 'gold', 'mutual fund'].includes(lower)) return 'Investment';
     return 'Want'; 
 };
 
@@ -117,8 +117,7 @@ const getFinancialContext = (transactions, userData) => {
     `;
 };
 
-// --- Components (Defined BEFORE Usage) ---
-
+// --- Components ---
 const Card = ({ children, className = "", isDark }) => (
     <div className={`backdrop-blur-md rounded-2xl p-6 shadow-xl transition-colors ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-white/80 border border-gray-200'} ${className}`}>
         {children}
@@ -145,6 +144,8 @@ const Button = ({ children, onClick, variant = "primary", className = "", icon: 
   );
 };
 
+// --- SUB-COMPONENTS ---
+
 const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
   if (!isVisible) return null;
   return (
@@ -154,12 +155,13 @@ const QuoteBanner = ({ quote, onClose, isVisible, onShow, isDark }) => {
             <h3 className={`font-semibold mb-1 text-sm uppercase tracking-wider ${isDark ? 'text-indigo-400' : 'text-indigo-700'}`}>Wisdom of the Day</h3>
             <p className={`text-sm italic font-medium ${isDark ? 'text-slate-200' : 'text-gray-700'}`}>"{quote}"</p>
         </div>
-        <button onClick={onClose} className={`p-1 absolute top-2 right-2 ${isDark ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}><X size={16}/></button>
+        {/* FIXED: Z-Index 50 to ensure clickability */}
+        <button onClick={onClose} className={`p-2 absolute top-2 right-2 cursor-pointer z-50 rounded-full transition-colors ${isDark ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'}`}>
+            <X size={18}/>
+        </button>
     </div>
   );
 };
-
-// --- SUB-COMPONENTS ---
 
 const Calculators = ({ isDark }) => {
     const [mode, setMode] = useState('sip'); 
@@ -514,7 +516,7 @@ export default function RichrApp() {
           if (view === 'loading' && !user) {
               setView('auth');
           }
-      }, 1500); 
+      }, 3000); 
       return () => clearTimeout(timer);
   }, [view, user]);
 
@@ -526,7 +528,7 @@ export default function RichrApp() {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         setUser(u);
-        setView('loading');
+        if (view === 'auth') setView('loading'); 
         
         // Listen to Profile
         unsubProfile = onSnapshot(doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main'), (snap) => {
@@ -581,19 +583,24 @@ export default function RichrApp() {
       } catch (e) { console.error(e); }
   };
 
-  const handleLogout = async () => {
-      setUser(null);
-      setView('auth');
-      setUserData({});
-      setTransactions([]);
-      setIsProfileOpen(false);
-      await signOut(auth);
-  };
-
+  // --- Handlers ---
   const handleAuthSubmit = async (e) => { e.preventDefault(); setErrorMsg(''); setIsSubmitting(true); try { if (authMode === 'login') await signInWithEmailAndPassword(auth, email, password); else await createUserWithEmailAndPassword(auth, email, password); } catch (err) { setErrorMsg(err.message); setIsSubmitting(false); } };
   const handleGoogleAuth = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInWithPopup(auth, googleProvider); } catch (err) { setErrorMsg("Google Sign-In Error."); console.error(err); setIsSubmitting(false); } };
   const handleGuestLogin = async () => { setErrorMsg(''); setIsSubmitting(true); try { await signInAnonymously(auth); } catch (err) { console.error(err); setErrorMsg("Guest Auth failed."); setIsSubmitting(false); } };
   
+  const handleLogout = async () => {
+    try {
+        setUser(null);
+        setView('auth');
+        setUserData({});
+        setTransactions([]);
+        setIsProfileOpen(false);
+        await signOut(auth);
+    } catch (error) {
+        console.error("Logout error", error);
+    }
+  };
+
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     if (!manualFormData.name || !manualFormData.income) return;
@@ -616,31 +623,6 @@ export default function RichrApp() {
   const addTransaction = async (title, amount, type, category, dateValue, recurring, typeClass) => { const d = new Date(dateValue); await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), { title, amount: parseFloat(amount), category: type === 'expense' ? 'Expense' : 'Income', tag: category || 'General', typeClass, createdAt: serverTimestamp(), dateStr: dateValue, monthStr: getMonthStr(d), yearStr: getYearStr(d) }); if (recurring && type === 'expense') { await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'subscriptions'), { title, amount: parseFloat(amount), tag: category || 'General', typeClass, day: d.getDate(), lastProcessedMonth: getMonthStr(d), createdAt: serverTimestamp() }); alert(`Subscription set!`); } setIsAddModalOpen(false); setTxDate(formatDate(new Date())); setIsRecurring(false); };
   const deleteTransaction = async (id) => { if(!window.confirm("Delete?")) return; await deleteDoc(doc(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions', id)); };
   const exportData = () => { const headers = ["Date", "Type", "Title", "Amount", "Tag", "Class"]; const rows = transactions.map(t => [t.dateStr, t.category, t.title, t.amount, t.tag, t.typeClass]); const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].map(e => e.join(",")).join("\n"); const link = document.createElement("a"); link.setAttribute("href", encodeURI(csvContent)); link.setAttribute("download", `richr.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
-  const handleImportCSV = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-        const text = evt.target.result;
-        const rows = text.split("\n").slice(1);
-        let addedCount = 0;
-        for (const row of rows) {
-            const cols = row.split(",");
-            if (cols.length >= 3) {
-                const dateVal = cols[0];
-                const titleVal = cols[1];
-                const amountVal = parseFloat(cols[2]);
-                if (dateVal && titleVal && !isNaN(amountVal)) {
-                    const d = new Date(dateVal);
-                    await addDoc(collection(db, 'artifacts', APP_ID, 'users', user.uid, 'transactions'), { dateStr: dateVal, title: titleVal, amount: amountVal, category: cols[3] || 'Expense', tag: cols[4] || 'General', typeClass: cols[5] || 'Want', monthStr: getMonthStr(d), yearStr: getYearStr(d), createdAt: serverTimestamp() });
-                    addedCount++;
-                }
-            }
-        }
-        alert(`Imported ${addedCount} transactions!`);
-    };
-    reader.readAsText(file);
-  };
 
   const stats = useMemo(() => {
     const today = formatDate(new Date()); const month = getMonthStr(new Date());
@@ -681,7 +663,7 @@ export default function RichrApp() {
   if (view === 'auth') return (
     <div className={`min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden ${isDarkMode ? 'bg-slate-950' : 'bg-gray-50'}`}>
        <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-emerald-500/10 rounded-full blur-[100px]"></div>
-       <QuoteBanner quote={dailyQuote} isVisible={showQuote} onClose={() => setShowQuote(false)} onShow={() => setShowQuote(true)} isDark={isDarkMode} />
+       <QuoteBanner quote={getDailyQuote()} isVisible={true} onClose={() => {}} onShow={() => {}} isDark={isDarkMode} />
       <Card className="w-full max-w-md z-10 animate-fade-in-up mt-4" isDark={isDarkMode}>
         <Activity className="w-12 h-12 text-emerald-500 mx-auto mb-6" />
         <h2 className={`text-2xl font-bold text-center mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{authMode === 'login' ? 'Welcome Back' : 'Join Richr'}</h2>
@@ -748,6 +730,9 @@ export default function RichrApp() {
             <span className={`font-bold text-xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Richr</span>
         </div>
         <div className="flex-1 flex justify-end items-center gap-4">
+            <button onClick={() => { setProfileInitialTab('settings'); setIsProfileOpen(true); }} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'text-slate-500 hover:text-white' : 'text-gray-400 hover:text-gray-800'}`}>
+                <Settings size={20} />
+            </button>
             <button onClick={() => { setProfileInitialTab('profile'); setIsProfileOpen(true); }} className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-md hover:scale-105 transition-transform overflow-hidden">
                 {userData.profilePic ? <img src={userData.profilePic} alt="Profile" className="w-full h-full object-cover" /> : (userData.name ? userData.name[0].toUpperCase() : 'U')}
             </button>
@@ -839,7 +824,7 @@ export default function RichrApp() {
                 </Card>
             </div>
             <div className="lg:col-span-1">
-                <Card className="sticky top-24 border-emerald-500/20 shadow-emerald-900/5" isDark={isDarkMode}><h3 className={`text-lg font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Quick Actions</h3><div className="space-y-3"><Button onClick={() => { setIsAddModalOpen(true); setNewTransType('expense'); }} variant="danger" icon={Plus} className="w-full justify-between group">Add Expense</Button><Button onClick={() => { setIsAddModalOpen(true); setNewTransType('income'); }} variant="primary" icon={Plus} className="w-full justify-between group">Add Income</Button></div><div className="mt-4 flex gap-2"><Button onClick={exportData} variant="secondary" size="sm" icon={Download} className="flex-1" isDark={isDarkMode}>Download Data</Button><label className={`flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs rounded-xl font-semibold cursor-pointer transition-all ${isDarkMode ? 'bg-slate-700 hover:bg-slate-600 text-slate-200' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}><Upload size={16} /> Import CSV<input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" /></label></div></Card>
+                <Card className="sticky top-24 border-emerald-500/20 shadow-emerald-900/5" isDark={isDarkMode}><h3 className={`text-lg font-bold mb-4 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Quick Actions</h3><div className="space-y-3"><Button onClick={() => { setIsAddModalOpen(true); setNewTransType('expense'); }} variant="danger" icon={Plus} className="w-full justify-between group">Add Expense</Button><Button onClick={() => { setIsAddModalOpen(true); setNewTransType('income'); }} variant="primary" icon={Plus} className="w-full justify-between group">Add Income</Button></div></Card>
             </div>
         </div>
       </main>

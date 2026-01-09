@@ -526,43 +526,57 @@ export default function RichrApp() {
     let unsubTrans;
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      console.log("Auth state changed:", u ? "User logged in" : "No user");
+      
       if (u) {
         setUser(u);
-        setView('loading'); 
+        console.log("User UID:", u.uid);
         
-        // Listen to Profile with error handling
-        unsubProfile = onSnapshot(
-          doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main'), 
-          (snap) => {
-            if (snap.exists()) {
-              const data = snap.data();
-              setUserData(data);
-              if(data.geminiKey) setGeminiKey(data.geminiKey);
-              setView('dashboard');
-              checkAndProcessSubscriptions(u.uid);
-            } else {
-              // Profile doesn't exist, need setup
+        // First check if profile exists
+        try {
+          const profileRef = doc(db, 'artifacts', APP_ID, 'users', u.uid, 'profile', 'main');
+          
+          // Listen to Profile
+          unsubProfile = onSnapshot(
+            profileRef, 
+            (snap) => {
+              console.log("Profile snapshot received. Exists:", snap.exists());
+              
+              if (snap.exists()) {
+                const data = snap.data();
+                console.log("Profile data:", data);
+                setUserData(data);
+                if(data.geminiKey) setGeminiKey(data.geminiKey);
+                setView('dashboard');
+                checkAndProcessSubscriptions(u.uid);
+              } else {
+                console.log("No profile found, showing setup");
+                setView('setup');
+              }
+            },
+            (error) => {
+              console.error("Profile fetch error:", error);
               setView('setup');
             }
-          },
-          (error) => {
-            console.error("Profile fetch error:", error);
-            setView('setup'); // Fallback to setup on error
-          }
-        );
+          );
 
-        // Listen to Transactions with error handling
-        unsubTrans = onSnapshot(
-          collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), 
-          (snap) => {
-            const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
-            txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-            setTransactions(txs);
-          },
-          (error) => {
-            console.error("Transactions fetch error:", error);
-          }
-        );
+          // Listen to Transactions
+          unsubTrans = onSnapshot(
+            collection(db, 'artifacts', APP_ID, 'users', u.uid, 'transactions'), 
+            (snap) => {
+              const txs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+              txs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+              setTransactions(txs);
+              console.log("Transactions loaded:", txs.length);
+            },
+            (error) => {
+              console.error("Transactions fetch error:", error);
+            }
+          );
+        } catch (error) {
+          console.error("Error setting up listeners:", error);
+          setView('setup');
+        }
       } else {
         setUser(null);
         setView('auth');
